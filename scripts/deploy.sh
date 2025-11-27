@@ -55,7 +55,7 @@ trap 'rm -f "$PASSWORD_FILE"' EXIT
 printf "%s" "$KEYSTORE_PASSWORD" > "$PASSWORD_FILE"
 unset KEYSTORE_PASSWORD
 
-forge script script/DeployBaseERC20.s.sol:DeployBaseERC20 \
+forge script script/DeployVeera.s.sol:DeployVeera \
   --rpc-url "$RPC_URL" \
   --broadcast \
   --keystore "$KEYSTORE_PATH" \

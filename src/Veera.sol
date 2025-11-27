@@ -7,7 +7,7 @@ import {ERC20Pausable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC2
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract BaseERC20 is ERC20Burnable, ERC20Pausable, Ownable, ERC20Permit {
+contract Veera is ERC20Burnable, ERC20Pausable, Ownable, ERC20Permit {
     /**
      * @param name_ Token name.
      * @param symbol_ Token symbol.

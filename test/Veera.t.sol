@@ -4,10 +4,10 @@ pragma solidity ^0.8.23;
 import {Test} from "forge-std/Test.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {BaseERC20} from "../src/BaseERC20.sol";
+import {Veera} from "../src/Veera.sol";
 
-contract BaseERC20Test is Test {
-    BaseERC20 private token;
+contract VeeraTest is Test {
+    Veera private token;
 
     address private constant OWNER = address(0xABCD);
     address private constant ALICE = address(0xBEEF);
@@ -16,7 +16,7 @@ contract BaseERC20Test is Test {
     uint256 private constant MINT_AMOUNT = 250 ether;
 
     function setUp() public {
-        token = new BaseERC20("Base Token", "BASE", OWNER, INITIAL_SUPPLY);
+        token = new Veera("Veera", "VEERA", OWNER, INITIAL_SUPPLY);
     }
 
     function testInitialSupplyAssignedToOwner() public view {

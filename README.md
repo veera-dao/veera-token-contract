@@ -28,6 +28,6 @@
 - Format: `forge fmt`
 
 ## Project Structure
-- `src/BaseERC20.sol`: Veera token implementation.
-- `script/DeployBaseERC20.s.sol`: Deployment script with Veera defaults.
+- `src/Veera.sol`: Veera token implementation.
+- `script/DeployVeera.s.sol`: Deployment script with Veera defaults.
 - `test/`: Foundry unit tests.
