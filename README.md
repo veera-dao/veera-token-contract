@@ -1,66 +1,33 @@
-## Foundry
+# Veera ERC20 Token
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+## Token Specs
+- Name: Veera
+- Symbol: VEERA
+- Initial supply: 1,000,000,000 VEERA (1_000_000_000 ether)
+- Features: burnable, pausable, permit (EIP-2612), and owner-only minting
 
-Foundry consists of:
+## Deploy
+1. Set the required environment variables (override the defaults only if needed):
+   ```bash
+   export TOKEN_OWNER=0xYourOwnerAddress        # required
+   export TOKEN_NAME="Veera"                    # optional override
+   export TOKEN_SYMBOL="VEERA"                  # optional override
+   export TOKEN_INITIAL_SUPPLY=1000000000e18    # optional override
+   export RPC_URL=https://your.rpc.url
+   ```
+2. Create secure deployment keys and deploy:
+   ```bash
+   ./scripts/generate-keystore.sh
+   ./scripts/deploy.sh
+   ```
+   These scripts will create password protected deployer keys, and use them to securely deploy the token.
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Development
+- Build: `forge build`
+- Test: `forge test`
+- Format: `forge fmt`
 
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+## Project Structure
+- `src/BaseERC20.sol`: Veera token implementation.
+- `script/DeployBaseERC20.s.sol`: Deployment script with Veera defaults.
+- `test/`: Foundry unit tests.
