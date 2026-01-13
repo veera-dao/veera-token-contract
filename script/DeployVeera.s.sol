@@ -1,21 +1,64 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.24;
 
-import {Script} from "forge-std/Script.sol";
+import {Script, console} from "forge-std/Script.sol";
 import {Veera} from "../src/Veera.sol";
+import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract DeployVeera is Script {
-    function run() external returns (Veera token) {
-        string memory defaultName = "Veera";
-        string memory defaultSymbol = "VEERA";
-        uint256 defaultSupply = 1_000_000_000 ether;
-        string memory name = vm.envOr("TOKEN_NAME", defaultName);
-        string memory symbol = vm.envOr("TOKEN_SYMBOL", defaultSymbol);
-        address tokenOwner = vm.envAddress("TOKEN_OWNER");
-        uint256 initialSupply = vm.envOr("TOKEN_INITIAL_SUPPLY", defaultSupply);
+    function run() external returns (Veera, HelperConfig) {
+        
+        HelperConfig config = new HelperConfig();
+        
+        (
+            address initialAdmin, 
+            uint256 initialSupply,
+            uint256 maxSupply,
+            string memory name, 
+            string memory symbol
+        ) = config.activeNetworkConfig();
+
+        require(initialAdmin != address(0), "Error: Admin Address cannot be zero");
+        require(bytes(name).length > 0, "Error: Token name cannot be empty");
+        require(bytes(symbol).length > 0, "Error: Token symbol cannot be empty");
+        require(maxSupply > 0, "Error: Max supply must be greater than zero");
+        require(initialSupply <= maxSupply, "Error: Initial supply exceeds max supply");
+
+        // Log chain ID for verification
+        console.log("Deploying to Chain ID:", block.chainid);
+        if (block.chainid != 8453 && block.chainid != 84532 && block.chainid != 31337) {
+            console.log("WARNING: Unexpected chain ID. Verify RPC URL is correct!");
+        }
+
+        // Validate admin address for live networks
+        if (block.chainid == 8453 || block.chainid == 84532) {
+            // Check that admin is a contract (Gnosis Safe)
+            uint256 codeSize;
+            assembly {
+                codeSize := extcodesize(initialAdmin)
+            }
+            require(codeSize > 0, "Error: Admin must be a contract (Gnosis Safe)");
+        }
 
         vm.startBroadcast();
-        token = new Veera(name, symbol, tokenOwner, initialSupply);
+
+        Veera token = new Veera(
+            name,
+            symbol,
+            initialAdmin,
+            initialSupply,
+            maxSupply
+        );
+
         vm.stopBroadcast();
+
+        console.log("--------------------------------------------------");
+        console.log("DEPLOYMENT COMPLETE");
+        console.log("Chain ID:     ", block.chainid);
+        console.log("Token Address:", address(token));
+        console.log("Admin Address:", initialAdmin); // Verify this matches your expected Safe
+        console.log("--------------------------------------------------");
+
+        return (token, config);
     }
 }
