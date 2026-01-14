@@ -161,9 +161,8 @@ contract VeeraTest is Test {
 
         vm.prank(admin);
         vm.expectRevert();
-        // FIX: Removed 'bool success =' and 'assertTrue(success)'
-        // When expecting a revert, we just make the call.
-        token.transfer(user, 10e18);
+        bool success = token.transfer(user, 10e18);
+        assertFalse(success);
     }
 
     function test_TransferFrom_RespectsPause() public {
@@ -179,15 +178,14 @@ contract VeeraTest is Test {
 
         vm.prank(spender);
         vm.expectRevert();
-        // FIX: Removed assertion on revert case
-        token.transferFrom(user, admin, 10e18);
+        bool success = token.transferFrom(user, admin, 10e18);
+        assertFalse(success);
 
         vm.prank(admin);
         token.unpause();
 
         vm.prank(spender);
-        // This success case should still capture return value to satisfy linter
-        bool success = token.transferFrom(user, admin, 10e18);
+        success = token.transferFrom(user, admin, 10e18);
         assertTrue(success);
 
         assertEq(token.balanceOf(admin), 1010e18);
@@ -306,8 +304,8 @@ contract VeeraTest is Test {
 
         vm.prank(admin);
         vm.expectRevert();
-        // FIX: Removed assertion on revert case
-        token.transfer(user, 10e18);
+        bool success = token.transfer(user, 10e18);
+        assertFalse(success);
     }
 
     function test_SupportsInterface() public view {
