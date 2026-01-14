@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {Veera} from "../src/Veera.sol"; 
+import {Veera} from "../src/Veera.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 
@@ -24,7 +24,7 @@ contract VeeraTest is Test {
     function setUp() public {
         adminPrivateKey = 0xA11CE;
         admin = vm.addr(adminPrivateKey);
-        
+
         userPrivateKey = 0xB0B;
         user = vm.addr(userPrivateKey);
 
@@ -45,7 +45,7 @@ contract VeeraTest is Test {
         assertEq(token.name(), "Veera Token");
         assertEq(token.symbol(), "VEERA");
         assertEq(token.balanceOf(admin), 1000e18);
-        
+
         assertTrue(token.hasRole(DEFAULT_ADMIN_ROLE, admin));
         assertTrue(token.hasRole(MINTER_ROLE, admin));
         assertTrue(token.hasRole(PAUSER_ROLE, admin));
@@ -68,18 +68,14 @@ contract VeeraTest is Test {
 
         vm.prank(bridgeAdapter);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                bridgeAdapter,
-                MINTER_ROLE
-            )
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, bridgeAdapter, MINTER_ROLE)
         );
         token.mint(user, 100e18);
     }
 
     function test_MultipleMinters() public {
         address minter2 = makeAddr("minter2");
-        
+
         vm.startPrank(admin);
         token.grantRole(MINTER_ROLE, bridgeAdapter);
         token.grantRole(MINTER_ROLE, minter2);
@@ -107,29 +103,20 @@ contract VeeraTest is Test {
     function test_RevertIf_Minting_Unauthorized() public {
         vm.prank(user);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                user,
-                MINTER_ROLE
-            )
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, MINTER_ROLE)
         );
         token.mint(user, 1000e18);
     }
 
     function test_RevertIf_Minting_ToZeroAddress() public {
         vm.prank(admin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InvalidReceiver.selector,
-                address(0)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InvalidReceiver.selector, address(0)));
         token.mint(address(0), 100e18);
     }
 
     function test_RevertIf_Minting_ExceedsCap() public {
         vm.prank(admin);
-        vm.expectRevert(); 
+        vm.expectRevert();
         token.mint(user, 1001e18);
     }
 
@@ -173,7 +160,7 @@ contract VeeraTest is Test {
         assertTrue(token.paused());
 
         vm.prank(admin);
-        vm.expectRevert(); 
+        vm.expectRevert();
         // FIX: Removed 'bool success =' and 'assertTrue(success)'
         // When expecting a revert, we just make the call.
         token.transfer(user, 10e18);
@@ -191,7 +178,7 @@ contract VeeraTest is Test {
         token.pause();
 
         vm.prank(spender);
-        vm.expectRevert(); 
+        vm.expectRevert();
         // FIX: Removed assertion on revert case
         token.transferFrom(user, admin, 10e18);
 
@@ -202,8 +189,8 @@ contract VeeraTest is Test {
         // This success case should still capture return value to satisfy linter
         bool success = token.transferFrom(user, admin, 10e18);
         assertTrue(success);
-        
-        assertEq(token.balanceOf(admin), 1010e18); 
+
+        assertEq(token.balanceOf(admin), 1010e18);
     }
 
     function test_Pause_StopsMinting() public {
@@ -212,7 +199,7 @@ contract VeeraTest is Test {
         vm.stopPrank();
 
         vm.prank(admin);
-        vm.expectRevert(); 
+        vm.expectRevert();
         token.mint(user, 100e18);
     }
 
@@ -222,7 +209,7 @@ contract VeeraTest is Test {
         vm.stopPrank();
 
         vm.prank(admin);
-        vm.expectRevert(); 
+        vm.expectRevert();
         token.burn(50e18);
     }
 
@@ -253,52 +240,32 @@ contract VeeraTest is Test {
         address spender = bridgeAdapter;
 
         bytes32 domainSeparator = token.DOMAIN_SEPARATOR();
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            admin, 
-            spender,
-            amount,
-            token.nonces(admin),
-            deadline
-        ));
-        bytes32 digest = keccak256(abi.encodePacked(
-            "\x19\x01",
-            domainSeparator,
-            structHash
-        ));
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, admin, spender, amount, token.nonces(admin), deadline));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(adminPrivateKey, digest);
 
-        vm.prank(user); 
+        vm.prank(user);
         token.permit(admin, spender, amount, deadline, v, r, s);
 
         assertEq(token.allowance(admin, spender), amount);
     }
 
     function test_Permit_ExpiredDeadline() public {
-        uint256 deadline = block.timestamp - 1; 
+        uint256 deadline = block.timestamp - 1;
         uint256 amount = 100e18;
         address spender = bridgeAdapter;
 
         bytes32 domainSeparator = token.DOMAIN_SEPARATOR();
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            admin,
-            spender,
-            amount,
-            token.nonces(admin),
-            deadline
-        ));
-        bytes32 digest = keccak256(abi.encodePacked(
-            "\x19\x01",
-            domainSeparator,
-            structHash
-        ));
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, admin, spender, amount, token.nonces(admin), deadline));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(adminPrivateKey, digest);
 
         vm.prank(user);
-        vm.expectRevert(); 
+        vm.expectRevert();
         token.permit(admin, spender, amount, deadline, v, r, s);
     }
 
@@ -308,24 +275,14 @@ contract VeeraTest is Test {
         address spender = bridgeAdapter;
 
         bytes32 domainSeparator = token.DOMAIN_SEPARATOR();
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            admin,
-            spender,
-            amount,
-            token.nonces(admin),
-            deadline
-        ));
-        bytes32 digest = keccak256(abi.encodePacked(
-            "\x19\x01",
-            domainSeparator,
-            structHash
-        ));
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, admin, spender, amount, token.nonces(admin), deadline));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, digest);
 
         vm.prank(user);
-        vm.expectRevert(); 
+        vm.expectRevert();
         token.permit(admin, spender, amount, deadline, v, r, s);
     }
 
@@ -335,19 +292,9 @@ contract VeeraTest is Test {
         address spender = bridgeAdapter;
 
         bytes32 domainSeparator = token.DOMAIN_SEPARATOR();
-        bytes32 structHash = keccak256(abi.encode(
-            PERMIT_TYPEHASH,
-            admin,
-            spender,
-            amount,
-            token.nonces(admin),
-            deadline
-        ));
-        bytes32 digest = keccak256(abi.encodePacked(
-            "\x19\x01",
-            domainSeparator,
-            structHash
-        ));
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, admin, spender, amount, token.nonces(admin), deadline));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(adminPrivateKey, digest);
 
         vm.prank(admin);
@@ -381,7 +328,7 @@ contract VeeraTest is Test {
         assertEq(zeroSupplyToken.totalSupply(), 0);
         assertEq(zeroSupplyToken.balanceOf(admin), 0);
         assertEq(zeroSupplyToken.cap(), 1000e18);
-        
+
         vm.prank(admin);
         zeroSupplyToken.mint(user, 1000e18);
         assertEq(zeroSupplyToken.totalSupply(), 1000e18);
@@ -394,9 +341,9 @@ contract VeeraTest is Test {
 
         assertEq(cappedToken.totalSupply(), 1000e18);
         assertEq(cappedToken.cap(), 1000e18);
-        
+
         vm.prank(admin);
-        vm.expectRevert(); 
+        vm.expectRevert();
         cappedToken.mint(user, 1);
     }
 
@@ -407,10 +354,10 @@ contract VeeraTest is Test {
     function testFuzz_Mint(uint256 amount) public {
         uint256 remainingSupply = token.cap() - token.totalSupply();
         amount = bound(amount, 0, remainingSupply);
-        
+
         vm.prank(admin);
         token.mint(user, amount);
-        
+
         assertEq(token.balanceOf(user), amount);
         assertEq(token.totalSupply(), 1000e18 + amount);
         assertLe(token.totalSupply(), token.cap());
@@ -420,10 +367,10 @@ contract VeeraTest is Test {
         amount = bound(amount, 1, token.balanceOf(admin));
         uint256 initialSupply = token.totalSupply();
         uint256 adminBalance = token.balanceOf(admin);
-        
+
         vm.prank(admin);
         token.burn(amount);
-        
+
         assertEq(token.balanceOf(admin), adminBalance - amount);
         assertEq(token.totalSupply(), initialSupply - amount);
     }
@@ -431,7 +378,7 @@ contract VeeraTest is Test {
     function testFuzz_Mint_ExceedsCap(uint256 amount) public {
         uint256 remainingSupply = token.cap() - token.totalSupply();
         amount = bound(amount, remainingSupply + 1, type(uint256).max);
-        
+
         vm.prank(admin);
         vm.expectRevert();
         token.mint(user, amount);
@@ -449,7 +396,7 @@ contract VeeraTest is Test {
         uint256 adminBalance = token.balanceOf(admin);
         uint256 userBalance = token.balanceOf(user);
         uint256 bridgeBalance = token.balanceOf(bridgeAdapter);
-        
+
         assertGe(token.totalSupply(), adminBalance + userBalance + bridgeBalance);
     }
 }

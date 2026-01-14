@@ -19,7 +19,6 @@ import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20P
  * - ERC20Pausable: Standard "freeze" logic for emergencies.
  */
 contract Veera is ERC20Burnable, ERC20Capped, ERC20Pausable, ERC20Permit, AccessControl {
-
     // Errors
     error InvalidAdminAddress();
     error InvalidNameOrSymbol();
@@ -29,16 +28,12 @@ contract Veera is ERC20Burnable, ERC20Capped, ERC20Pausable, ERC20Permit, Access
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     constructor(
-        string memory name_, 
-        string memory symbol_, 
-        address initialAdmin, 
-        uint256 initialSupply, 
+        string memory name_,
+        string memory symbol_,
+        address initialAdmin,
+        uint256 initialSupply,
         uint256 maxSupply_
-    )
-        ERC20(name_, symbol_)
-        ERC20Capped(maxSupply_)
-        ERC20Permit(name_)
-    {
+    ) ERC20(name_, symbol_) ERC20Capped(maxSupply_) ERC20Permit(name_) {
         if (initialAdmin == address(0)) revert InvalidAdminAddress();
         if (bytes(name_).length == 0 || bytes(symbol_).length == 0) revert InvalidNameOrSymbol();
 
@@ -82,10 +77,7 @@ contract Veera is ERC20Burnable, ERC20Capped, ERC20Pausable, ERC20Permit, Access
      * 2. ERC20Capped checks supply cap.
      * 3. ERC20 updates balances.
      */
-    function _update(address from, address to, uint256 value) 
-        internal 
-        override(ERC20, ERC20Capped, ERC20Pausable) 
-    {
+    function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Capped, ERC20Pausable) {
         super._update(from, to, value);
     }
 }

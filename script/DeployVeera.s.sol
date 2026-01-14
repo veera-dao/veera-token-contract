@@ -7,16 +7,10 @@ import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract DeployVeera is Script {
     function run() external returns (Veera, HelperConfig) {
-        
         HelperConfig config = new HelperConfig();
-        
-        (
-            address initialAdmin, 
-            uint256 initialSupply,
-            uint256 maxSupply,
-            string memory name, 
-            string memory symbol
-        ) = config.activeNetworkConfig();
+
+        (address initialAdmin, uint256 initialSupply, uint256 maxSupply, string memory name, string memory symbol) =
+            config.activeNetworkConfig();
 
         require(initialAdmin != address(0), "Error: Admin Address cannot be zero");
         require(bytes(name).length > 0, "Error: Token name cannot be empty");
@@ -42,13 +36,7 @@ contract DeployVeera is Script {
 
         vm.startBroadcast();
 
-        Veera token = new Veera(
-            name,
-            symbol,
-            initialAdmin,
-            initialSupply,
-            maxSupply
-        );
+        Veera token = new Veera(name, symbol, initialAdmin, initialSupply, maxSupply);
 
         vm.stopBroadcast();
 
