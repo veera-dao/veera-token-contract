@@ -18,7 +18,7 @@ import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20P
  * - ERC20Permit: Supports gasless transactions.
  * - ERC20Pausable: Standard "freeze" logic for emergencies.
  */
-contract Veera is ERC20Burnable, ERC20Capped, ERC20Pausable, ERC20Permit, AccessControl {
+contract Veera is ERC20, ERC20Burnable, ERC20Capped, ERC20Pausable, ERC20Permit, AccessControl {
     // Errors
     error InvalidAdminAddress();
     error InvalidNameOrSymbol();
