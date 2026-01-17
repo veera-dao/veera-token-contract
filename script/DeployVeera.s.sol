@@ -31,7 +31,11 @@ contract DeployVeera is Script {
             assembly {
                 codeSize := extcodesize(initialAdmin)
             }
-            require(codeSize > 0, "Error: Admin must be a contract (Gnosis Safe)");
+            if (block.chainid == 8453) {
+                require(codeSize > 0, "Error: Admin must be a contract (i.e. a Gnosis Safe)");
+            } else if (codeSize == 0) {
+                console.log("WARNING: Admin is not a contract (i.e. Gnosis Safe)");
+            }
         }
 
         vm.startBroadcast();
