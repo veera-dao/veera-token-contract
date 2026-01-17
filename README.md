@@ -96,19 +96,19 @@ This step deploys the contract using a hardware wallet. The hardware wallet pays
     export BASE_RPC_URL=[https://mainnet.base.org](https://mainnet.base.org)
     export ETHERSCAN_API_KEY=ABC123ABC123...
     export HARDWARE=--ledger
-    export HARDWARE_WALLET_ADDRESS=0x000...
+    export DEPLOYER_ADDRESS=0x000...
     ```
 
     1. For testnet deployments, set `BASE_RPC_URL` to `https://sepolia.base.org`
     2. Set `HARDWARE` to either `--ledger` for `--trezor`.
-    3. Set `HARDWARE_WALLET_ADDRESS` to the address of the connected hardware wallet.
+    3. Set `DEPLOYER_ADDRESS` to the address of the connected hardware wallet.
 
 3.  **Run the Deployment Command:**
     ```bash
     forge script script/DeployVeera.s.sol \
       --rpc-url ${BASE_RPC_URL} \
       --sig "run()" \
-      --sender ${HARDWARE_WALLET_ADDRESS} \
+      --sender ${DEPLOYER_ADDRESS} \
       --broadcast \
       --verify \
       --etherscan-api-key ${ETHERSCAN_API_KEY} \

@@ -19,8 +19,8 @@ if [ -z "$ETHERSCAN_API_KEY" ]; then
     exit 1
 fi
 
-if [ -z "$HARDWARE_WALLET_ADDRESS" ]; then
-    echo "❌ Error: HARDWARE_WALLET_ADDRESS is not set in .env"
+if [ -z "$DEPLOYER_ADDRESS" ]; then
+    echo "❌ Error: DEPLOYER_ADDRESS is not set in .env"
     exit 1
 fi
 
@@ -37,7 +37,7 @@ fi
 forge script script/DeployVeera.s.sol \
   --rpc-url ${BASE_RPC_URL} \
   --sig "run()" \
-  --sender ${HARDWARE_WALLET_ADDRESS} \
+  --sender ${DEPLOYER_ADDRESS} \
   --broadcast \
   --verify \
   --etherscan-api-key ${ETHERSCAN_API_KEY} \
