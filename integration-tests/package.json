@@ -1,0 +1,34 @@
+{
+  "name": "veera-integration-tests",
+  "version": "1.0.0",
+  "description": "Integration tests for Veera token contract",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "tsx src/index.ts",
+    "preflight": "tsx src/preflight-only.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "generate-abi": "cd .. && forge build && cat out/Veera.sol/Veera.json | jq '.abi' > integration-tests/src/veera-abi.json",
+    "prep": "npm run generate-abi"
+  },
+  "keywords": [
+    "ethereum",
+    "smart-contracts",
+    "integration-tests"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "viem": "^2.21.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0",
+    "tsx": "^4.16.0",
+    "chalk": "^5.3.0"
+  }
+}
+

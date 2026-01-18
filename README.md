@@ -291,3 +291,103 @@ The gas costs listed in Section 4 are influenced by several factors:
 - Network congestion
 - EIP-1559 base fee
 - Contract state (paused/unpaused)
+
+---
+
+## 9. Integration Testing
+
+After deploying the contract, you can run comprehensive integration tests to verify all functionality on the deployed instance.
+
+### Overview
+
+The integration test suite is a TypeScript-based testing framework that validates:
+
+- ERC20 standard operations (transfer, approve, allowance, transferFrom)
+- ERC20Permit (gasless approvals with EIP-712 signatures)
+- Minting operations (success, cap enforcement, zero address checks)
+- Burning operations (burn, burnFrom, insufficient balance handling)
+- Pausing operations (pause/unpause, verify operations are blocked/resumed)
+- Access control (role management, permission verification)
+- Edge cases (zero address, insufficient balance/allowance, boundary conditions)
+
+### Quick Start
+
+1. **Navigate to integration tests directory:**
+
+   ```bash
+   cd integration-tests
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment variables:**
+
+   Add the following to your `.env` file (in the project root):
+
+   ```bash
+   # Required
+   BASE_RPC_URL=https://sepolia.base.org
+   CONTRACT_ADDRESS=0x...  # Your deployed contract address
+   ADMIN_ADDRESS=0x...     # Admin address (has all roles)
+   ADMIN_PRIVATE_KEY=0x... # Admin private key
+   TEST_USER_ADDRESS=0x... # Test user address
+   TEST_USER_PRIVATE_KEY=0x... # Test user private key
+
+   # Optional (for role testing)
+   MINTER_ADDRESS=0x...
+   MINTER_PRIVATE_KEY=0x...
+   PAUSER_ADDRESS=0x...
+   PAUSER_PRIVATE_KEY=0x...
+   ```
+
+4. **Run tests:**
+
+   ```bash
+   npm test
+   ```
+
+### Prerequisites
+
+- Node.js v18 or higher
+- npm or yarn
+- Test accounts with sufficient ETH for gas fees
+- Deployed contract address
+
+### Test Account Setup
+
+You'll need at least two test accounts:
+
+1. **Admin Account**: Must have `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE`, and `PAUSER_ROLE`
+   - Used for minting, pausing, and role management
+   - Must have sufficient ETH for gas
+
+2. **Test User Account**: Regular user account
+   - Used for transfers, approvals, receiving tokens
+   - Must have sufficient ETH for gas
+
+Optional accounts (for comprehensive role testing):
+- **Minter Account**: Will be granted `MINTER_ROLE` during tests
+- **Pauser Account**: Will be granted `PAUSER_ROLE` during tests
+
+### Test Output
+
+The test suite provides detailed output showing:
+- Individual test results (✓ pass, ✗ fail)
+- Transaction hashes for on-chain verification
+- Per-suite summary
+- Overall summary with pass/fail counts
+
+### Documentation
+
+For detailed documentation, see [integration-tests/README.md](integration-tests/README.md).
+
+### Security Notes
+
+- **Never commit private keys**: Use environment variables or secure key management
+- **Test on testnet first**: Always test on testnet before mainnet
+- **Verify contract address**: Double-check the contract address before running tests
+- **Use separate accounts**: Don't use production accounts for testing
