@@ -62,10 +62,10 @@ fi
 # Check token name
 echo ""
 echo "📋 Checking token metadata..."
-TOKEN_NAME=$(cast call "$CONTRACT_ADDRESS" "name()(string)" --rpc-url "$BASE_RPC_URL")
-TOKEN_SYMBOL=$(cast call "$CONTRACT_ADDRESS" "symbol()(string)" --rpc-url "$BASE_RPC_URL")
-TOTAL_SUPPLY=$(cast call "$CONTRACT_ADDRESS" "totalSupply()(uint256)" --rpc-url "$BASE_RPC_URL")
-CAP=$(cast call "$CONTRACT_ADDRESS" "cap()(uint256)" --rpc-url "$BASE_RPC_URL")
+TOKEN_NAME=$(cast call "$CONTRACT_ADDRESS" "name()(string)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
+TOKEN_SYMBOL=$(cast call "$CONTRACT_ADDRESS" "symbol()(string)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
+TOTAL_SUPPLY=$(cast call "$CONTRACT_ADDRESS" "totalSupply()(uint256)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
+CAP=$(cast call "$CONTRACT_ADDRESS" "cap()(uint256)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
 
 echo "Name: $TOKEN_NAME"
 echo "Symbol: $TOKEN_SYMBOL"
@@ -112,4 +112,3 @@ echo "1. Verify the contract on BaseScan: https://basescan.org/address/$CONTRACT
 echo "2. Confirm source code verification (green checkmark)"
 echo "3. Review the 'Read Contract' tab to verify all roles"
 echo "4. Test that the expected admin address can pause/unpause"
-
