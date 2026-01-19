@@ -22,12 +22,10 @@ contract HelperConfig is Script {
     constructor() {
         address adminAddress;
 
-        if (block.chainid == 8453) {
-            // CRITICAL: Mainnet Gnosis Safe.
-            adminAddress = 0x0000000000000000000000000000000000000000;
-        } else if (block.chainid == 84532) {
-            // CRITICAL: Base Sepolia (Testnet Safe / Dev Wallet).
-            adminAddress = 0x0000000000000000000000000000000000000000;
+        if (block.chainid == 8453) { // Base Mainnet
+            adminAddress = 0xd2b8875b840D3BD574E1e6b440888e110632A0FD;
+        } else if (block.chainid == 84532) { // Base Sepolia Testnet
+            adminAddress = 0xfEDB58C317d347e265990888919879a5d392a12c;
         } else {
             // Local / Anvil (Default Foundry Sender) (common known address)
             adminAddress = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
