@@ -22,9 +22,11 @@ contract HelperConfig is Script {
     constructor() {
         address adminAddress;
 
-        if (block.chainid == 8453) { // Base Mainnet
+        if (block.chainid == 8453) {
+            // Base Mainnet
             adminAddress = 0xd2b8875b840D3BD574E1e6b440888e110632A0FD;
-        } else if (block.chainid == 84532) { // Base Sepolia Testnet
+        } else if (block.chainid == 84532) {
+            // Base Sepolia Testnet
             adminAddress = 0xfEDB58C317d347e265990888919879a5d392a12c;
         } else {
             // Local / Anvil (Default Foundry Sender) (common known address)
