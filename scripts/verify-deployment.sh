@@ -119,13 +119,14 @@ if [ -n "$EXPECTED_ADMIN" ]; then
     fi
 fi
 
+
 # Check token metadata
 echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${CYAN}${BOLD}📊 Token Metadata${NC} ${YELLOW}⏳ Querying...${NC}"
-TOKEN_NAME=$(cast call "$CONTRACT_ADDRESS" "name()(string)" --rpc-url "$BASE_RPC_URL")
-TOKEN_SYMBOL=$(cast call "$CONTRACT_ADDRESS" "symbol()(string)" --rpc-url "$BASE_RPC_URL")
-TOTAL_SUPPLY=$(cast call "$CONTRACT_ADDRESS" "totalSupply()(uint256)" --rpc-url "$BASE_RPC_URL")
-CAP=$(cast call "$CONTRACT_ADDRESS" "cap()(uint256)" --rpc-url "$BASE_RPC_URL")
+TOKEN_NAME=$(cast call "$CONTRACT_ADDRESS" "name()(string)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
+TOKEN_SYMBOL=$(cast call "$CONTRACT_ADDRESS" "symbol()(string)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
+TOTAL_SUPPLY=$(cast call "$CONTRACT_ADDRESS" "totalSupply()(uint256)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
+CAP=$(cast call "$CONTRACT_ADDRESS" "cap()(uint256)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
 
 if [ "$TOKEN_NAME" == "\"Veera Token\"" ]; then
     TOKEN_NAME_STATUS="${GREEN}${BOLD}✓ VERIFIED${NC}"
