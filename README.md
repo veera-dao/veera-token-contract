@@ -4,6 +4,13 @@ This repository contains the smart contracts for the Veera token. It is built us
 
 The architecture is designed with **security** and **future interoperability** (native bridging) in mind.
 
+## 0. Deployments
+
+The token is deployed to the following chains:
+
+1. Base Mainnet [0xf9cc3c5ca95cc4d034216b41328ae0d6136053d6](https://basescan.org/address/0xf9cc3c5ca95cc4d034216b41328ae0d6136053d6)
+2. Base Sepolia [0xb8df343bb4b648732c2c90df3276f97e46ee0bea](https://sepolia.basescan.org/address/0xb8df343bb4b648732c2c90df3276f97e46ee0bea)
+
 ## 1. Architecture & Design Decisions
 
 ### Core Standards
@@ -39,7 +46,7 @@ The following immutable values are defined in `script/HelperConfig.s.sol`:
 * **Name:** `Veera Token`
 * **Symbol:** `VEERA`
 * **Initial Supply:** `1,000,000,000` (Minted to the Admin immediately)
-* **Maximum Supply Cap:** `1,000,000,000` (Same as initial supply, prevents unlimited inflation)
+* **Maximum Supply Cap:** `1,000,000,000` (Same as initial supply, prevents unlimited inflation, [enforced by ERC20Capped](src/Veera.sol#L36))
 * **Initial Admin:** `EVM_ADDRESS` Chain specific address. Must be a Gnosis Safe for Mainnet. **Must be checksummed.**
 
 *NOTE:* Ensure all addresses are in EIP-55 format to avoid compiler errors.
