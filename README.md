@@ -17,7 +17,7 @@ The token is deployed to the following chains:
 * **ERC20:** Standard fungible token implementation.
 * **ERC20Burnable:** Allows supply to be managed. This is **critical** for future cross-chain bridging (Lock-and-Mint / Burn-and-Mint).
 * **ERC20Permit:** Enables gasless approvals (EIP-2612), enabling sponsored gas fees for a seamless UX.
-* **ERC20Pausable:** Emergency stop mechanism to freeze transfers in the event of a critical security incident. **Note:** Pausing only affects token transfers; minting and burning operations continue to function normally.
+* **ERC20Pausable:** *Not in use.* Emergency stop mechanism to freeze transfers in the event of a critical security incident. **Note:** Pausing only affects token transfers; minting and burning operations continue to function normally.
 
 ### Access Control Strategy
 
@@ -28,7 +28,7 @@ We use `AccessControl` instead of `Ownable` to prevent "Vendor Lock-in" with bri
 | **DEFAULT_ADMIN_ROLE** | **Gnosis Safe** | Can grant/revoke roles. The supreme authority. |
 | **MINTER_ROLE** | **Gnosis Safe** | Can mint new tokens. |
 | **MINTER_ROLE** (Future) | **Bridge Adapter** | Future bridges will be granted this role to burn/mint tokens when bridging to/from other chains. |
-| **PAUSER_ROLE** | **Gnosis Safe** | Can pause/unpause all token transfers. |
+| **PAUSER_ROLE** (Disabled) | **Gnosis Safe** | Can pause/unpause all token transfers. |
 
 ---
 
