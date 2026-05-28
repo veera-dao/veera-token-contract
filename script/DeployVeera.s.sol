@@ -3,7 +3,14 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {Veera} from "../src/Veera.sol";
-import {HelperConfig} from "./HelperConfig.s.sol";
+import {
+    HelperConfig,
+    BASE_MAINNET_CHAINID,
+    BASE_SEPOLIA_CHAINID,
+    BSC_MAINNET_CHAINID,
+    BSC_TESTNET_CHAINID,
+    LOCAL_CHAINID
+} from "./HelperConfig.s.sol";
 
 contract DeployVeera is Script {
     function run() external returns (Veera, HelperConfig) {
@@ -20,18 +27,25 @@ contract DeployVeera is Script {
 
         // Log chain ID for verification
         console.log("Deploying to Chain ID:", block.chainid);
-        if (block.chainid != 8453 && block.chainid != 84532 && block.chainid != 31337) {
+        if (
+            block.chainid != BASE_MAINNET_CHAINID && block.chainid != BASE_SEPOLIA_CHAINID
+                && block.chainid != BSC_MAINNET_CHAINID && block.chainid != BSC_TESTNET_CHAINID
+                && block.chainid != LOCAL_CHAINID
+        ) {
             console.log("WARNING: Unexpected chain ID. Verify RPC URL is correct!");
         }
 
         // Validate admin address for live networks
-        if (block.chainid == 8453 || block.chainid == 84532) {
+        if (
+            block.chainid == BASE_MAINNET_CHAINID || block.chainid == BASE_SEPOLIA_CHAINID
+                || block.chainid == BSC_MAINNET_CHAINID || block.chainid == BSC_TESTNET_CHAINID
+        ) {
             // Check that admin is a contract (Gnosis Safe)
             uint256 codeSize;
             assembly {
                 codeSize := extcodesize(initialAdmin)
             }
-            if (block.chainid == 8453) {
+            if (block.chainid == BASE_MAINNET_CHAINID || block.chainid == BSC_MAINNET_CHAINID) {
                 require(codeSize > 0, "Error: Admin must be a contract (i.e. a Gnosis Safe)");
             } else if (codeSize == 0) {
                 console.log("WARNING: Admin is not a contract (i.e. Gnosis Safe)");
