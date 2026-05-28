@@ -8,8 +8,19 @@ The architecture is designed with **security** and **future interoperability** (
 
 The token is deployed to the following chains:
 
-1. Base Mainnet [0xf9cc3c5ca95cc4d034216b41328ae0d6136053d6](https://basescan.org/address/0xf9cc3c5ca95cc4d034216b41328ae0d6136053d6)
-2. Base Sepolia [0xb8df343bb4b648732c2c90df3276f97e46ee0bea](https://sepolia.basescan.org/address/0xb8df343bb4b648732c2c90df3276f97e46ee0bea)
+### Base
+| Network | Address |
+| :--- | :--- |
+| **Base Mainnet** | [0xf9cc3c5ca95cc4d034216b41328ae0d6136053d6](https://basescan.org/address/0xf9cc3c5ca95cc4d034216b41328ae0d6136053d6) |
+| **Base Sepolia** | [0xb8df343bb4b648732c2c90df3276f97e46ee0bea](https://sepolia.basescan.org/address/0xb8df343bb4b648732c2c90df3276f97e46ee0bea) |
+
+### BNB Smart Chain (BSC)
+| Network | Address |
+| :--- | :--- |
+| **BSC Mainnet** | *Not yet deployed* |
+| **BSC Testnet** | *Not yet deployed* |
+
+**Note:** On Base, the full initial supply (1B tokens) is minted at deployment. On BSC, the initial supply is **0**
 
 ## 1. Architecture & Design Decisions
 
@@ -37,17 +48,46 @@ We use `AccessControl` instead of `Ownable` to prevent "Vendor Lock-in" with bri
 ### Environment Variables
 Copy `.env.example` to `.env` and set the following:
 
-* `BASE_RPC_URL`: Connection to the Base network.
-* `ETHERSCAN_API_KEY`: Used to verify the source code on BaseScan.
+* `BASE_RPC_URL`: RPC endpoint for the target network (Base or BSC — see [Supported Networks](#supported-networks) below).
+* `ETHERSCAN_API_KEY`: API key used to verify source code on the block explorer (BaseScan or BscScan, depending on the target chain). See [Creating an Explorer API Key](#creating-an-explorer-api-key) for setup instructions.
+
+### Supported Networks
+
+The contract auto-detects the target chain via `block.chainid`. The same `BASE_RPC_URL` environment variable is used regardless of the target network — point it at the appropriate RPC endpoint.
+
+| Chain | Chain ID | RPC Endpoint (example) | Explorer |
+| :--- | :--- | :--- | :--- |
+| Base Mainnet | 8453 | `https://mainnet.base.org` | [basescan.org](https://basescan.org) |
+| Base Sepolia | 84532 | `https://sepolia.base.org` | [sepolia.basescan.org](https://sepolia.basescan.org) |
+| BSC Mainnet | 56 | `https://bsc-dataseed.binance.org` | [bscscan.com](https://bscscan.com) |
+| BSC Testnet | 97 | `https://data-seed-prebsc-1-s1.binance.org:8545` | [testnet.bscscan.com](https://testnet.bscscan.com) |
+
+### Creating an Explorer API Key
+
+An API key is required for automatic source code verification during deployment. You need a key from the explorer matching your target chain.
+
+
+1. Go to [etherscan.io](https://https://etherscan.io/) and create an account (or sign in).
+2. Navigate to **My Account** → **API Keys** (or go directly to [basescan.org/myapikey](https://basescan.org/myapikey)).
+3. Click **Add** to create a new API key.
+4. Copy the key and set it as `ETHERSCAN_API_KEY` in your `.env` file.
+
 
 ### Hardcoded Parameters
 
 The following immutable values are defined in `script/HelperConfig.s.sol`:
 * **Name:** `Veera Token`
 * **Symbol:** `VEERA`
-* **Initial Supply:** `1,000,000,000` (Minted to the Admin immediately)
+* **Initial Supply:** `1,000,000,000` on Base (minted to the Admin immediately) / `0` on BSC
 * **Maximum Supply Cap:** `1,000,000,000` (Same as initial supply, prevents unlimited inflation, [enforced by ERC20Capped](src/Veera.sol#L36))
-* **Initial Admin:** `EVM_ADDRESS` Chain specific address. Must be a Gnosis Safe for Mainnet. **Must be checksummed.**
+* **Initial Admin:** Chain-specific address (see table below). Must be a Gnosis Safe for Mainnet. **Must be checksummed.**
+
+| Chain | Admin Address |
+| :--- | :--- |
+| Base Mainnet | `0xd2b8875b840D3BD574E1e6b440888e110632A0FD` |
+| Base Sepolia | `0xfEDB58C317d347e265990888919879a5d392a12c` |
+| BSC Mainnet | `0xd2b8875b840D3BD574E1e6b440888e110632A0FD` (same as Base Mainnet) |
+| BSC Testnet | `0x9FF0FB8e246ac58b17Acf9b7D43B76E2D2e6Bf03` |
 
 *NOTE:* Ensure all addresses are in EIP-55 format to avoid compiler errors.
 ---
@@ -59,9 +99,9 @@ We utilize a hardcoded configuration in [script/HelperConfig.s.sol](script/Helpe
 
 ### Prerequisites
 * **Hardware Wallet:** A Ledger or Trezor initialized and connected.
-* **Gnosis Safe:** A Safe deployed on Base Mainnet to act as the Admin.
-* **ETH:** Approximately 0.05 ETH on Base Mainnet on the **Hardware Wallet** address (to pay for gas). The Safe does *not* need ETH to receive the role.
-* **API Keys:** A valid BaseScan API key for verification.
+* **Gnosis Safe:** A Safe deployed on the target chain's mainnet to act as the Admin.
+* **Gas Funds:** Native gas token on the target chain (ETH for Base, BNB for BSC) on the **Hardware Wallet** address. The Safe does *not* need funds to receive the role.
+* **API Keys:** A valid explorer API key for verification (BaseScan for Base, BscScan for BSC). See [Creating an Explorer API Key](#creating-an-explorer-api-key).
 
 ---
 
@@ -75,9 +115,10 @@ Before running any commands, both parties must verify the "Truth" source in the 
     git checkout main
     git pull
     ```
-2.  **Audit the Config File:** Open `script/HelperConfig.s.sol` and verify the **Base Mainnet (8453)** section:
-    * **Line 26 (Admin):** Ensure `adminAddress = 0x...` matches the **Production Gnosis Safe** exactly.
-    * **Line 18-20 (Constants):** Verify `NAME`, `SYMBOL`, and `INITIAL_SUPPLY` match the product spec.
+2.  **Audit the Config File:** Open `script/HelperConfig.s.sol` and verify the section for the target chain:
+    * **Admin Address:** Ensure `adminAddress` for the target chain ID matches the **Production Gnosis Safe** exactly.
+    * **Constants:** Verify `NAME`, `SYMBOL`, and `INITIAL_SUPPLY` match the product spec.
+    * **BSC Note:** Verify that `initialSupply` is set to `0 ether` for BSC chains (tokens are bridged, not minted at deploy).
 3.  **Lock the Release:**
     If the config is correct, create a git tag to mark this specific version of the bytecode.
     ```bash
@@ -99,16 +140,28 @@ This step deploys the contract using a hardware wallet. The hardware wallet pays
     * Ensure "Blind Signing" is enabled in the Ethereum App settings (required for smart contract deployment).
 
 2.  **Set Environment Variables:**
+
+    **For Base:**
     ```bash
-    export BASE_RPC_URL=[https://mainnet.base.org](https://mainnet.base.org)
-    export ETHERSCAN_API_KEY=ABC123ABC123...
+    export BASE_RPC_URL=https://mainnet.base.org
+    export ETHERSCAN_API_KEY=<your BaseScan API key>
     export HARDWARE=--ledger
     export DEPLOYER_ADDRESS=0x000...
     ```
 
-    1. For testnet deployments, set `BASE_RPC_URL` to `https://sepolia.base.org`
-    2. Set `HARDWARE` to either `--ledger` for `--trezor`.
+    **For BSC:**
+    ```bash
+    export BASE_RPC_URL=https://bsc-dataseed.binance.org
+    export ETHERSCAN_API_KEY=<your BscScan API key>
+    export HARDWARE=--ledger
+    export DEPLOYER_ADDRESS=0x000...
+    ```
+
+    **Notes:**
+    1. For testnet deployments, set `BASE_RPC_URL` to the testnet RPC (e.g., `https://sepolia.base.org` for Base Sepolia, `https://data-seed-prebsc-1-s1.binance.org:8545` for BSC Testnet).
+    2. Set `HARDWARE` to either `--ledger` or `--trezor`.
     3. Set `DEPLOYER_ADDRESS` to the address of the connected hardware wallet.
+    4. Set `ETHERSCAN_API_KEY` to the API key from the matching block explorer (BaseScan or BscScan).
 
 3.  **Run the Deployment Command:**
     ```bash
@@ -124,13 +177,13 @@ This step deploys the contract using a hardware wallet. The hardware wallet pays
 
     **Flag Explanations:**
     * `--ledger` / `--trezor`: Tells Foundry to sign using the USB device.
-    * `--broadcast`: Actually sends the transaction to the network (costs real ETH).
-    * `--verify`: Uploads the source code to BaseScan immediately.
+    * `--broadcast`: Actually sends the transaction to the network (costs real gas).
+    * `--verify`: Uploads the source code to the block explorer immediately.
 
 4.  **Sign on Device:**
     * Foundry will compile the code and simulate the transaction.
     * Your device will prompt to `Review Transaction`.
-    * **Verify Chain ID:** Ensure the screen says `Chain ID: 8453` (Base mainnet).
+    * **Verify Chain ID:** Ensure the screen shows the correct chain ID for your target network (`8453` for Base, `56` for BSC).
     * **Approve:** detailed transaction data will likely be blind, but you are confirming the deployment cost.
 
 ---
@@ -142,7 +195,7 @@ Do not consider the token "Live" until this step is complete.
 
 1.  **Locate Contract:**
     * Copy the `Contract Address` from the terminal output of Phase 2.
-    * Go to [BaseScan.org](https://basescan.org) and paste the address.
+    * Go to the target chain's block explorer ([basescan.org](https://basescan.org) for Base, [bscscan.com](https://bscscan.com) for BSC) and paste the address.
 2.  **Verify Source Code:**
     * Click the **Contract** tab.
     * Ensure it has a Green Checkmark (Verified).
@@ -173,7 +226,7 @@ This script will:
 - Check pause status
 - Validate all role assignments
 
-**Note:** The script requires `cast` (part of Foundry) and the `BASE_RPC_URL` environment variable.
+**Note:** The script requires `cast` (part of Foundry) and the `BASE_RPC_URL` environment variable (pointed at the correct chain's RPC endpoint).
 
 ---
 
@@ -256,7 +309,7 @@ token.revokeRole(MINTER_ROLE, bridgeAdapterAddress);
 
 You can query role identifiers using:
 ```bash
-cast call <TOKEN_ADDRESS> "MINTER_ROLE()(bytes32)" --rpc-url $BASE_RPC_URL
+cast call <TOKEN_ADDRESS> "MINTER_ROLE()(bytes32)" --rpc-url $BASE_RPC_URL  # BASE_RPC_URL pointed at the target chain
 ```
 
 ---
