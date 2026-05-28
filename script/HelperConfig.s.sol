@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {Script} from "forge-std/Script.sol";
 
 uint256 constant BASE_MAINNET_CHAINID = 8453;
-uint256 constant BASE_SEPOLIA_CHAINID = 84532;
+uint256 constant BASE_TESTNET_CHAINID = 84532; // Sepolia
 uint256 constant BSC_MAINNET_CHAINID = 56;
 uint256 constant BSC_TESTNET_CHAINID = 97;
 uint256 constant LOCAL_CHAINID = 31337;
@@ -37,8 +37,8 @@ contract HelperConfig is Script {
         if (block.chainid == BASE_MAINNET_CHAINID) {
             // Base Mainnet
             adminAddress = BASE_MAINNET_ADMIN;
-        } else if (block.chainid == BASE_SEPOLIA_CHAINID) {
-            // Base Sepolia Testnet
+        } else if (block.chainid == BASE_TESTNET_CHAINID) {
+            // Base Testnet
             adminAddress = BASE_TESTNET_ADMIN;
         } else if (block.chainid == BSC_MAINNET_CHAINID) {
             // BSC Mainnet (initial supply set to 0 as the token is bridged)

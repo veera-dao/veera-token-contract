@@ -6,7 +6,7 @@ import {Veera} from "../src/Veera.sol";
 import {
     HelperConfig,
     BASE_MAINNET_CHAINID,
-    BASE_SEPOLIA_CHAINID,
+    BASE_TESTNET_CHAINID,
     BSC_MAINNET_CHAINID,
     BSC_TESTNET_CHAINID,
     LOCAL_CHAINID
@@ -28,7 +28,7 @@ contract DeployVeera is Script {
         // Log chain ID for verification
         console.log("Deploying to Chain ID:", block.chainid);
         if (
-            block.chainid != BASE_MAINNET_CHAINID && block.chainid != BASE_SEPOLIA_CHAINID
+            block.chainid != BASE_MAINNET_CHAINID && block.chainid != BASE_TESTNET_CHAINID
                 && block.chainid != BSC_MAINNET_CHAINID && block.chainid != BSC_TESTNET_CHAINID
                 && block.chainid != LOCAL_CHAINID
         ) {
@@ -37,7 +37,7 @@ contract DeployVeera is Script {
 
         // Validate admin address for live networks
         if (
-            block.chainid == BASE_MAINNET_CHAINID || block.chainid == BASE_SEPOLIA_CHAINID
+            block.chainid == BASE_MAINNET_CHAINID || block.chainid == BASE_TESTNET_CHAINID
                 || block.chainid == BSC_MAINNET_CHAINID || block.chainid == BSC_TESTNET_CHAINID
         ) {
             // Check that admin is a contract (Gnosis Safe)
