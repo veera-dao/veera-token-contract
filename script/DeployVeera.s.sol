@@ -27,13 +27,12 @@ contract DeployVeera is Script {
 
         // Log chain ID for verification
         console.log("Deploying to Chain ID:", block.chainid);
-        if (
-            block.chainid != BASE_MAINNET_CHAINID && block.chainid != BASE_TESTNET_CHAINID
-                && block.chainid != BSC_MAINNET_CHAINID && block.chainid != BSC_TESTNET_CHAINID
-                && block.chainid != LOCAL_CHAINID
-        ) {
-            console.log("WARNING: Unexpected chain ID. Verify RPC URL is correct!");
-        }
+        require(
+            block.chainid == BASE_MAINNET_CHAINID || block.chainid == BASE_TESTNET_CHAINID
+                || block.chainid == BSC_MAINNET_CHAINID || block.chainid == BSC_TESTNET_CHAINID
+                || block.chainid == LOCAL_CHAINID,
+            "Error: Unsupported chain ID. Verify RPC URL is correct!"
+        );
 
         // Validate admin address for live networks
         if (
