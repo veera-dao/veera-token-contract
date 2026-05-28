@@ -11,7 +11,7 @@ uint256 constant LOCAL_CHAINID = 31337;
 
 address constant BASE_MAINNET_ADMIN = 0xd2b8875b840D3BD574E1e6b440888e110632A0FD;
 address constant BASE_TESTNET_ADMIN = 0xfEDB58C317d347e265990888919879a5d392a12c;
-address constant BSC_MAINNET_ADMIN = 0xd2b8875b840D3BD574E1e6b440888e110632A0FD;
+address constant BSC_MAINNET_ADMIN = BASE_MAINNET_ADMIN;
 address constant BSC_TESTNET_ADMIN = 0x9FF0FB8e246ac58b17Acf9b7D43B76E2D2e6Bf03;
 
 contract HelperConfig is Script {
@@ -41,11 +41,11 @@ contract HelperConfig is Script {
             // Base Sepolia Testnet
             adminAddress = BASE_TESTNET_ADMIN;
         } else if (block.chainid == BSC_MAINNET_CHAINID) {
-            // BSC Mainnet
+            // BSC Mainnet (initial supply set to 0 as the token is bridged)
             adminAddress = BSC_MAINNET_ADMIN;
             initialSupply = 0 ether;
         } else if (block.chainid == BSC_TESTNET_CHAINID) {
-            // BSC Testnet
+            // BSC Testnet (initial supply set to 0 as the token is bridged)
             adminAddress = BSC_TESTNET_ADMIN;
             initialSupply = 0 ether;
         } else {
