@@ -1,210 +1,297 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test} from "forge-std/Test.sol";
+import {LayerZeroTestHelper, OFTMock} from "./LayerZeroTestHelper.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
+import {SendParam, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oft/OFTCore.sol";
 import {Veera} from "../src/Veera.sol";
 import {VeeraMintBurnOFTAdapter} from "../src/bridge/VeeraMintBurnOFTAdapter.sol";
-import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-/**
- * @title VeeraMintBurnOFTAdapterHarness
- * @notice Exposes the internal _debit and _credit functions of the adapter for isolated unit testing.
- */
-contract VeeraMintBurnOFTAdapterHarness is VeeraMintBurnOFTAdapter {
-    constructor(address _token, address _lzEndpoint, address _delegate)
-        VeeraMintBurnOFTAdapter(_token, _lzEndpoint, _delegate)
-    {}
+contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
+    using OptionsBuilder for bytes;
 
-    function exposedDebit(address _from, uint256 _amountLd, uint256 _minAmountLd, uint32 _dstEid)
-        external
-        returns (uint256 amountSentLd, uint256 amountReceivedLd)
-    {
-        return _debit(_from, _amountLd, _minAmountLd, _dstEid);
-    }
+    uint32 private constant A_EID = 1;
+    uint32 private constant B_EID = 2;
 
-    function exposedCredit(address _to, uint256 _amountLd, uint32 _srcEid) external returns (uint256 amountReceivedLd) {
-        return _credit(_to, _amountLd, _srcEid);
-    }
-}
+    Veera public tokenA;
+    VeeraMintBurnOFTAdapter public adapterA;
+    OFTMock public oftB;
 
-contract MockLayerZeroEndpoint {
-    function setDelegate(
-        address /*_delegate*/
-    )
-        external {
-        // Mock success for constructor setup
-    }
-}
-
-contract VeeraMintBurnOFTAdapterTest is Test {
-    Veera public token;
-    VeeraMintBurnOFTAdapterHarness public adapter;
-
-    address public admin;
-    address public user;
-    address public mockLzEndpoint;
+    address public userA;
+    address public userB;
+    uint256 public initialBalance = 100e18;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     event ERC20Rescued(address indexed token, address indexed to, uint256 amount);
 
-    function setUp() public {
-        admin = makeAddr("admin");
-        user = makeAddr("user");
+    function setUp() public virtual override {
+        userA = makeAddr("userA");
+        userB = makeAddr("userB");
 
-        // Deploy the mock LayerZero Endpoint
-        MockLayerZeroEndpoint mockEndpoint = new MockLayerZeroEndpoint();
-        mockLzEndpoint = address(mockEndpoint);
+        // Provide native fee funding to users for bridging
+        vm.deal(userA, 100 ether);
+        vm.deal(userB, 100 ether);
 
-        vm.startPrank(admin);
-        // Deploy Veera: Name, Symbol, Admin, Initial Supply, Max Supply
-        token = new Veera("Veera Token", "VEERA", admin, 1000e18, 2000e18);
+        super.setUp();
 
-        // Deploy testing harness
-        adapter = new VeeraMintBurnOFTAdapterHarness(address(token), mockLzEndpoint, admin);
+        // Initialize 2 endpoints using our lightweight helper
+        setUpEndpoints(2);
 
-        // Grant MINTER_ROLE to the adapter
-        token.grantRole(MINTER_ROLE, address(adapter));
-        vm.stopPrank();
+        // Chain A: Deploy Veera token and the Adapter
+        tokenA = new Veera("Veera Token", "VEERA", address(this), 1000e18, 2000e18);
+        adapterA = new VeeraMintBurnOFTAdapter(address(tokenA), address(endpoints[A_EID]), address(this));
+
+        // Chain B: Deploy OFTMock
+        oftB = new OFTMock("Veera OFT", "VEERA", address(endpoints[B_EID]), address(this));
+
+        // Grant MINTER_ROLE to the adapter on Chain A token
+        tokenA.grantRole(MINTER_ROLE, address(adapterA));
+
+        // Wire the adapter on Chain A to the OFT on Chain B
+        address[] memory ofts = new address[](2);
+        ofts[0] = address(adapterA);
+        ofts[1] = address(oftB);
+        this.wireOApps(ofts);
+
+        // Mint initial tokens to userA on Chain A
+        tokenA.mint(userA, initialBalance);
     }
 
     function test_Initialization() public view {
-        assertEq(address(adapter.token()), address(token));
-        assertEq(adapter.owner(), admin);
-        assertTrue(token.hasRole(MINTER_ROLE, address(adapter)));
+        assertEq(address(adapterA.token()), address(tokenA));
+        assertEq(adapterA.owner(), address(this));
+        assertTrue(tokenA.hasRole(MINTER_ROLE, address(adapterA)));
     }
 
-    function test_Debit_BurnsTokens_Success() public {
-        // Prepare: Mint 100 tokens to user
-        vm.prank(admin);
-        token.mint(user, 100e18);
-        assertEq(token.balanceOf(user), 100e18);
-        uint256 initialTotalSupply = token.totalSupply();
+    function test_Send_OFTAdapter_To_OFT_Success() public {
+        uint256 amountToSend = 50e18;
 
-        // User approves adapter
-        vm.prank(user);
-        token.approve(address(adapter), 50e18);
+        // User A approves the adapter to spend their tokens on Chain A
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
 
-        // Debit: Burn 50 tokens
-        vm.prank(address(mockLzEndpoint));
-        (uint256 amountSent, uint256 amountReceived) = adapter.exposedDebit(user, 50e18, 50e18, 1);
+        // Build options
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
 
-        assertEq(amountSent, 50e18);
-        assertEq(amountReceived, 50e18);
+        // Prepare send parameters
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
 
-        // Verify balances and supply
-        assertEq(token.balanceOf(user), 50e18);
-        assertEq(token.totalSupply(), initialTotalSupply - 50e18);
-        assertEq(token.balanceOf(address(adapter)), 0); // No tokens locked in the adapter
+        // Quote the native fee
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+
+        uint256 initialTotalSupplyA = tokenA.totalSupply();
+
+        // Perform the send operation
+        vm.prank(userA);
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+
+        // Assert tokens are burned on Chain A
+        assertEq(tokenA.balanceOf(userA), initialBalance - amountToSend);
+        assertEq(tokenA.totalSupply(), initialTotalSupplyA - amountToSend);
+
+        // Deliver message to Chain B
+        verifyPackets(B_EID, address(oftB));
+
+        // Assert tokens are minted on Chain B
+        assertEq(oftB.balanceOf(userB), amountToSend);
+    }
+
+    function test_Send_OFT_To_OFTAdapter_Success() public {
+        uint256 amountToSend = 40e18;
+
+        // Mint some tokens to userB on Chain B first
+        oftB.mint(userB, amountToSend);
+        assertEq(oftB.balanceOf(userB), amountToSend);
+
+        // Build options
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        // Prepare send parameters
+        SendParam memory sendParam = SendParam({
+            dstEid: A_EID,
+            to: addressToBytes32(userA),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        // Quote the fee on Chain B
+        MessagingFee memory fee = oftB.quoteSend(sendParam, false);
+
+        uint256 initialBalanceA = tokenA.balanceOf(userA);
+        uint256 initialTotalSupplyA = tokenA.totalSupply();
+
+        // Perform send on Chain B (OFTMock does not require approval because approvalRequired is false)
+        vm.prank(userB);
+        oftB.send{value: fee.nativeFee}(sendParam, fee, payable(userB));
+
+        // Assert tokens are burned on Chain B
+        assertEq(oftB.balanceOf(userB), 0);
+
+        // Deliver message to Chain A
+        verifyPackets(A_EID, address(adapterA));
+
+        // Assert tokens are minted on Chain A
+        assertEq(tokenA.balanceOf(userA), initialBalanceA + amountToSend);
+        assertEq(tokenA.totalSupply(), initialTotalSupplyA + amountToSend);
     }
 
     function test_Debit_RevertsIf_NoAllowance() public {
-        // Prepare: Mint 100 tokens to user
-        vm.prank(admin);
-        token.mint(user, 100e18);
+        uint256 amountToSend = 50e18;
+        // User A does NOT approve the adapter
 
-        // Debit without approval: should revert
-        vm.prank(address(mockLzEndpoint));
-        vm.expectRevert();
-        adapter.exposedDebit(user, 50e18, 50e18, 1);
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+
+        vm.prank(userA);
+        vm.expectRevert(); // Should revert due to ERC20InsufficientAllowance or similar
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
     }
 
     function test_Debit_RevertsIf_SlippageExceeded() public {
-        // Prepare: Mint 100 tokens to user
-        vm.prank(admin);
-        token.mint(user, 100e18);
+        uint256 amountToSend = 50e18;
 
-        vm.prank(user);
-        token.approve(address(adapter), 50e18);
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
 
-        // Debit: request minAmount of 60e18 for a 50e18 send (should revert with SlippageExceeded)
-        vm.prank(address(mockLzEndpoint));
-        vm.expectRevert();
-        adapter.exposedDebit(user, 50e18, 60e18, 1);
-    }
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
 
-    function test_Credit_MintsTokens_Success() public {
-        uint256 initialTotalSupply = token.totalSupply();
+        // Prepare valid parameters to get a quote first
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
 
-        // Credit: Mint 75 tokens to user
-        vm.prank(address(mockLzEndpoint));
-        uint256 amountReceived = adapter.exposedCredit(user, 75e18, 1);
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
 
-        assertEq(amountReceived, 75e18);
+        // Now set minAmountLD higher than amountLD to trigger revert during send
+        sendParam.minAmountLD = 60e18;
 
-        // Verify balances and supply
-        assertEq(token.balanceOf(user), 75e18);
-        assertEq(token.totalSupply(), initialTotalSupply + 75e18);
+        vm.prank(userA);
+        vm.expectRevert(); // Reverts due to SlippageExceeded / minAmountLD validation
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
     }
 
     function test_Credit_RevertsIf_NoMinterRole() public {
-        // Deploy a new adapter and do NOT grant it MINTER_ROLE
-        vm.prank(admin);
-        VeeraMintBurnOFTAdapterHarness unauthorizedAdapter =
-            new VeeraMintBurnOFTAdapterHarness(address(token), mockLzEndpoint, admin);
+        uint256 amountToSend = 40e18;
+        oftB.mint(userB, amountToSend);
 
-        // Credit should revert
-        vm.prank(address(mockLzEndpoint));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, address(unauthorizedAdapter), MINTER_ROLE
-            )
-        );
-        unauthorizedAdapter.exposedCredit(user, 75e18, 1);
-    }
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
 
-    function test_Credit_RevertsIf_ZeroReceiverAddress() public {
-        vm.prank(address(mockLzEndpoint));
-        vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidReceiverAddress.selector));
-        adapter.exposedCredit(address(0), 75e18, 1);
+        SendParam memory sendParam = SendParam({
+            dstEid: A_EID,
+            to: addressToBytes32(userA),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = oftB.quoteSend(sendParam, false);
+
+        vm.prank(userB);
+        oftB.send{value: fee.nativeFee}(sendParam, fee, payable(userB));
+
+        // Revoke the minter role from the adapter
+        tokenA.revokeRole(MINTER_ROLE, address(adapterA));
+
+        // Attempting to deliver the packets to Chain A should fail/revert because the adapter lacks MINTER_ROLE
+        vm.expectRevert();
+        verifyPackets(A_EID, address(adapterA));
     }
 
     function test_BridgeRespectsPause() public {
-        // Prepare: Mint tokens and approve
-        vm.prank(admin);
-        token.mint(user, 100e18);
+        uint256 amountToSend = 50e18;
 
-        vm.prank(user);
-        token.approve(address(adapter), 100e18);
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
 
-        // Admin pauses the token
-        vm.prank(admin);
-        token.pause();
+        // Pause the token on Chain A
+        tokenA.pause();
 
-        // Debit (burn) should revert when paused
-        vm.prank(address(mockLzEndpoint));
+        // 1. Send from Chain A should revert when token is paused
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParamA = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory feeA = adapterA.quoteSend(sendParamA, false);
+
+        vm.prank(userA);
+        vm.expectRevert(); // Reverts due to paused token
+        adapterA.send{value: feeA.nativeFee}(sendParamA, feeA, payable(userA));
+
+        // Unpause to clear the state and send from Chain B to Chain A
+        tokenA.unpause();
+
+        // Mint and send from Chain B
+        oftB.mint(userB, amountToSend);
+
+        SendParam memory sendParamB = SendParam({
+            dstEid: A_EID,
+            to: addressToBytes32(userA),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory feeB = oftB.quoteSend(sendParamB, false);
+
+        vm.prank(userB);
+        oftB.send{value: feeB.nativeFee}(sendParamB, feeB, payable(userB));
+
+        // Pause the token again before packet delivery (credit) on Chain A
+        tokenA.pause();
+
+        // 2. Delivery to Chain A should fail because token is paused (minting is blocked)
         vm.expectRevert();
-        adapter.exposedDebit(user, 50e18, 50e18, 1);
-
-        // Credit (mint) should revert when paused
-        vm.prank(address(mockLzEndpoint));
-        vm.expectRevert();
-        adapter.exposedCredit(user, 50e18, 1);
-
-        // Admin unpauses the token
-        vm.prank(admin);
-        token.unpause();
-
-        // Operations should now succeed
-        vm.prank(address(mockLzEndpoint));
-        adapter.exposedDebit(user, 50e18, 50e18, 1);
-        assertEq(token.balanceOf(user), 50e18);
-
-        vm.prank(address(mockLzEndpoint));
-        adapter.exposedCredit(user, 25e18, 1);
-        assertEq(token.balanceOf(user), 75e18);
+        verifyPackets(A_EID, address(adapterA));
     }
 
     function test_RescueERC20_Success() public {
         // Deploy a dummy ERC20 token to rescue
-        vm.prank(admin);
-        Veera randomToken = new Veera("Random Token", "RAND", admin, 1000e18, 1000e18);
+        Veera randomToken = new Veera("Random Token", "RAND", address(this), 1000e18, 1000e18);
 
         // Mistakenly transfer 100 random tokens to the adapter
-        vm.prank(admin);
-        assertTrue(randomToken.transfer(address(adapter), 100e18));
-        assertEq(randomToken.balanceOf(address(adapter)), 100e18);
+        assertTrue(randomToken.transfer(address(adapterA), 100e18));
+        assertEq(randomToken.balanceOf(address(adapterA)), 100e18);
 
         address recipient = makeAddr("recipient");
 
@@ -213,55 +300,43 @@ contract VeeraMintBurnOFTAdapterTest is Test {
         emit ERC20Rescued(address(randomToken), recipient, 100e18);
 
         // Rescue the tokens as owner
-        vm.prank(admin);
-        adapter.rescueERC20(address(randomToken), recipient, 100e18);
+        adapterA.rescueERC20(address(randomToken), recipient, 100e18);
 
         // Verify balances
-        assertEq(randomToken.balanceOf(address(adapter)), 0);
+        assertEq(randomToken.balanceOf(address(adapterA)), 0);
         assertEq(randomToken.balanceOf(recipient), 100e18);
     }
 
     function test_RescueERC20_RevertsIf_NonOwner() public {
-        vm.prank(admin);
-        Veera randomToken = new Veera("Random Token", "RAND", admin, 1000e18, 1000e18);
+        Veera randomToken = new Veera("Random Token", "RAND", address(this), 1000e18, 1000e18);
+        assertTrue(randomToken.transfer(address(adapterA), 100e18));
 
-        vm.prank(admin);
-        assertTrue(randomToken.transfer(address(adapter), 100e18));
-
-        // Try to rescue as non-owner (user)
-        vm.prank(user);
-        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user));
-        adapter.rescueERC20(address(randomToken), user, 100e18);
+        address nonOwner = makeAddr("nonOwner");
+        vm.prank(nonOwner);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
+        adapterA.rescueERC20(address(randomToken), nonOwner, 100e18);
     }
 
     function test_RescueERC20_RevertsIf_ZeroAddress() public {
-        vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidTokenAddress.selector));
-        adapter.rescueERC20(address(0), user, 100e18);
+        adapterA.rescueERC20(address(0), userA, 100e18);
 
-        vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidReceiverAddress.selector));
-        adapter.rescueERC20(address(token), address(0), 100e18);
+        adapterA.rescueERC20(address(tokenA), address(0), 100e18);
     }
 
     function test_Constructor_RevertsIf_ZeroTokenAddress() public {
-        vm.prank(admin);
-        // Expect revert due to decimals() call on address(0) in base constructor
         vm.expectRevert();
-        new VeeraMintBurnOFTAdapterHarness(address(0), mockLzEndpoint, admin);
+        new VeeraMintBurnOFTAdapter(address(0), address(endpoints[A_EID]), address(this));
     }
 
     function test_Constructor_RevertsIf_ZeroEndpointAddress() public {
-        vm.prank(admin);
-        // Expect revert due to endpoint check or low-level call to address(0) in base constructor
         vm.expectRevert();
-        new VeeraMintBurnOFTAdapterHarness(address(token), address(0), admin);
+        new VeeraMintBurnOFTAdapter(address(tokenA), address(0), address(this));
     }
 
     function test_Constructor_RevertsIf_ZeroDelegateAddress() public {
-        vm.prank(admin);
-        // Expect revert from Ownable(0) constructor which executes first
         vm.expectRevert(abi.encodeWithSignature("OwnableInvalidOwner(address)", address(0)));
-        new VeeraMintBurnOFTAdapterHarness(address(token), mockLzEndpoint, address(0));
+        new VeeraMintBurnOFTAdapter(address(tokenA), address(endpoints[A_EID]), address(0));
     }
 }

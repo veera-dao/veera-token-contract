@@ -22,6 +22,9 @@ contract DeployOFTAdapter is Script {
             // eid is not used in this script
         ) = config.activeNetworkConfig();
 
+        require(lzEndpoint != address(0), "Error: LayerZero Endpoint address cannot be zero");
+        require(initialAdmin != address(0), "Error: Delegate address cannot be zero");
+
         // Retrieve the token address from environment or deploy a new one if local
         address tokenAddress = vm.envOr("VEERA_TOKEN_ADDRESS", address(0));
 
@@ -43,9 +46,6 @@ contract DeployOFTAdapter is Script {
         console.log("LayerZero Endpoint V2 Address:    ", lzEndpoint);
         console.log("Delegate/Owner Address:           ", initialAdmin);
         console.log("--------------------------------------------------");
-
-        require(lzEndpoint != address(0), "Error: LayerZero Endpoint address cannot be zero");
-        require(initialAdmin != address(0), "Error: Delegate address cannot be zero");
 
         vm.startBroadcast();
 
