@@ -30,6 +30,18 @@ We use `AccessControl` instead of `Ownable` to prevent "Vendor Lock-in" with bri
 | **MINTER_ROLE** (Future) | **Bridge Adapter** | Future bridges will be granted this role to burn/mint tokens when bridging to/from other chains. |
 | **PAUSER_ROLE** (Disabled) | **Gnosis Safe** | Can pause/unpause all token transfers. |
 
+### LayerZero V2 Bridging (MintBurnOFTAdapter)
+
+The cross-chain bridging is powered by LayerZero V2 using a custom [VeeraMintBurnOFTAdapter](src/bridge/VeeraMintBurnOFTAdapter.sol).
+
+* **Mechanism**: Rather than locking tokens in an escrow vault (Lock-and-Unlock pattern), the adapter utilizes a **Burn-and-Mint** pattern. When a user sends tokens to another chain, the adapter burns them directly from the user's wallet via `burnFrom`. On the destination chain, the corresponding adapter mints them back to the user via `mint`. This maintains a clean, uniform global supply without custodial honeypots.
+* **Access Control**: The adapter **must** receive `MINTER_ROLE` (and only this adapter) on the local [Veera](src/Veera.sol) token contract to allow it to mint tokens on credit (bridge in) without any other entity having mint authority.
+* **User Approval**: Users **must approve** this adapter address on the `Veera` token contract before calling the LayerZero `send` function.
+* **Peer Configuration**: It is recommended to use LayerZero's official `lz` CLI or Hardhat/devtools configuration tasks for peer wiring.
+* **Limitations & Safety Guidelines**:
+  * **Single Adapter per Chain**: Only one `OFTAdapter` should be deployed per chain for this token. Multiple adapters break unified liquidity and can lead to permanent token loss on destination chains.
+  * **Fee-on-Transfer**: Fee-on-transfer / rebasing tokens are **not supported** by this adapter.
+
 ---
 
 ## 2. Configuration

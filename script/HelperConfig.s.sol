@@ -14,6 +14,18 @@ address constant BASE_TESTNET_ADMIN = 0xfEDB58C317d347e265990888919879a5d392a12c
 address constant BSC_MAINNET_ADMIN = BASE_MAINNET_ADMIN;
 address constant BSC_TESTNET_ADMIN = 0x9FF0FB8e246ac58b17Acf9b7D43B76E2D2e6Bf03;
 
+// LayerZero endpoints
+address constant BASE_MAINNET_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+address constant BASE_TESTNET_LZ_ENDPOINT = 0x6EDCE65403992e310A62460808c4b910D972f10f;
+address constant BSC_MAINNET_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+address constant BSC_TESTNET_LZ_ENDPOINT = 0x6EDCE65403992e310A62460808c4b910D972f10f;
+
+// LayerZero endpoint IDs
+uint32 constant BASE_TESTNET_EID = 40245;
+uint32 constant BASE_MAINNET_EID = 30184;
+uint32 constant BSC_MAINNET_EID = 30102;
+uint32 constant BSC_TESTNET_EID = 40102;
+
 contract HelperConfig is Script {
     struct NetworkConfig {
         address initialAdmin;
@@ -21,6 +33,8 @@ contract HelperConfig is Script {
         uint256 maxSupply;
         string name;
         string symbol;
+        address lzEndpoint;
+        uint32 eid;
     }
 
     NetworkConfig public activeNetworkConfig;
@@ -33,31 +47,49 @@ contract HelperConfig is Script {
     constructor() {
         address adminAddress;
         uint256 initialSupply = INITIAL_SUPPLY;
+        address lzEndpoint;
+        uint32 eid;
 
         if (block.chainid == BASE_MAINNET_CHAINID) {
             // Base Mainnet
             adminAddress = BASE_MAINNET_ADMIN;
+            lzEndpoint = BASE_MAINNET_LZ_ENDPOINT;
+            eid = BASE_MAINNET_EID;
         } else if (block.chainid == BASE_TESTNET_CHAINID) {
             // Base Testnet
             adminAddress = BASE_TESTNET_ADMIN;
+            lzEndpoint = BASE_TESTNET_LZ_ENDPOINT;
+            eid = BASE_TESTNET_EID;
         } else if (block.chainid == BSC_MAINNET_CHAINID) {
             // BSC Mainnet (initial supply set to 0 as the token is bridged)
             adminAddress = BSC_MAINNET_ADMIN;
             initialSupply = 0 ether;
+            lzEndpoint = BSC_MAINNET_LZ_ENDPOINT;
+            eid = BSC_MAINNET_EID;
         } else if (block.chainid == BSC_TESTNET_CHAINID) {
             // BSC Testnet (initial supply set to 0 as the token is bridged)
             adminAddress = BSC_TESTNET_ADMIN;
             initialSupply = 0 ether;
+            lzEndpoint = BSC_TESTNET_LZ_ENDPOINT;
+            eid = BSC_TESTNET_EID;
         } else {
             // Local / Anvil (Default Foundry Sender) (common known address)
             adminAddress = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+            lzEndpoint = address(0);
+            eid = 0;
         }
 
         // Validate zero addresses are not used
         require(adminAddress != address(0), "HelperConfig: Admin address cannot be zero");
 
         activeNetworkConfig = NetworkConfig({
-            initialAdmin: adminAddress, initialSupply: initialSupply, maxSupply: MAX_SUPPLY, name: NAME, symbol: SYMBOL
+            initialAdmin: adminAddress,
+            initialSupply: initialSupply,
+            maxSupply: MAX_SUPPLY,
+            name: NAME,
+            symbol: SYMBOL,
+            lzEndpoint: lzEndpoint,
+            eid: eid
         });
     }
 }
