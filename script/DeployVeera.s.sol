@@ -16,7 +16,7 @@ contract DeployVeera is Script {
     function run() external returns (Veera, HelperConfig) {
         HelperConfig config = new HelperConfig();
 
-        (address initialAdmin, uint256 initialSupply, uint256 maxSupply, string memory name, string memory symbol) =
+        (address initialAdmin, uint256 initialSupply, uint256 maxSupply, string memory name, string memory symbol,,) =
             config.activeNetworkConfig();
 
         require(initialAdmin != address(0), "Error: Admin Address cannot be zero");
