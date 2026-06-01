@@ -6,11 +6,18 @@ import {Veera} from "../src/Veera.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract DeployVeera is Script {
+    /// @dev keccak256 of the ABI-encoded global deterministic manifest parameters.
+    ///      Recompute via `forge test --match-test test_logManifestIntegrityHash -vvv` after any manifest change.
+    bytes32 constant EXPECTED_MANIFEST_INTEGRITY_HASH =
+        0x311293f824025683a250cb4e44e77b038d0013d8e23027c586246f3ed612426c;
+
     function run() external returns (Veera, HelperConfig) {
         HelperConfig config = new HelperConfig();
         HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
 
         // 1. Determine deployer address (defaulting to manifest.bootstrapAdmin if env is not set)
+        // Heuristic: In Forge tests, msg.sender is the test contract (has code).
+        // In live broadcasts, msg.sender is an EOA (no code).
         bool isTest = msg.sender.code.length > 0;
         address deployerAddress;
         if (isTest) {
@@ -36,8 +43,8 @@ contract DeployVeera is Script {
                 )
             );
             require(
-                calculatedHash == 0x311293f824025683a250cb4e44e77b038d0013d8e23027c586246f3ed612426c,
-                "DeployVeera: Manifest integrity hash mismatch. Manifest parameters have been tampered with."
+                calculatedHash == EXPECTED_MANIFEST_INTEGRITY_HASH,
+                "DeployVeera: Manifest integrity hash mismatch. Global parameters differ from approved values."
             );
         }
 
@@ -105,8 +112,8 @@ contract DeployVeera is Script {
 
         Veera token;
         if (predictedCodeSize > 0) {
-            console.log("INFO: Contract already deployed at predicted address:", predicted);
-            console.log("Skipping deployment to ensure idempotency.");
+            console.log("WARNING: Contract already deployed at predicted address:", predicted);
+            console.log("WARNING: Running in VERIFICATION-ONLY mode. No transactions will be broadcast.");
             token = Veera(predicted);
         } else {
             // Start broadcast using the determined deployer signer path
@@ -127,7 +134,11 @@ contract DeployVeera is Script {
             bytes memory deployData = abi.encodePacked(manifest.salt, creationCode);
             (bool success, bytes memory returnedData) = manifest.factory.call(deployData);
             require(success, "Failed to deploy via CREATE2 factory");
-            address deployedAddress = abi.decode(abi.encodePacked(bytes12(0), returnedData), (address));
+            require(returnedData.length == 20, "Unexpected CREATE2 factory return data length");
+            address deployedAddress;
+            assembly {
+                deployedAddress := shr(96, mload(add(returnedData, 0x20)))
+            }
             require(deployedAddress == predicted, "Deployed address mismatch");
             token = Veera(deployedAddress);
 
@@ -159,9 +170,6 @@ contract DeployVeera is Script {
 
         // Supply assertions
         require(token.totalSupply() == manifest.expectedPostDeploymentSupply, "Fail-closed: Total supply mismatch");
-        if (manifest.expectedPostDeploymentSupply == 0) {
-            require(token.totalSupply() == 0, "Fail-closed: Remote chain must start with zero supply");
-        }
 
         // Bootstrap admin role revoking assertions
         require(

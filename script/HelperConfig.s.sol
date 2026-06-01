@@ -43,7 +43,7 @@ contract HelperConfig is Script {
         require(vm.keyExistsJson(json, ".bootstrapAdmin"), "HelperConfig: bootstrapAdmin key missing in manifest");
         require(vm.keyExistsJson(json, ".name"), "HelperConfig: name key missing in manifest");
         require(vm.keyExistsJson(json, ".symbol"), "HelperConfig: symbol key missing in manifest");
-        require(vm.keyExistsJson(json, ".initialSupply"), "HelperConfig: initialSupply key missing in manifest");
+        require(vm.keyExistsJson(json, ".constructorSupply"), "HelperConfig: constructorSupply key missing in manifest");
         require(vm.keyExistsJson(json, ".maxSupply"), "HelperConfig: maxSupply key missing in manifest");
         require(
             vm.keyExistsJson(json, ".expectedTokenAddress"),
@@ -56,8 +56,8 @@ contract HelperConfig is Script {
         manifestConfig.bootstrapAdmin = json.readAddress(".bootstrapAdmin");
         manifestConfig.name = json.readString(".name");
         manifestConfig.symbol = json.readString(".symbol");
-        manifestConfig.constructorSupply = json.readUint(".initialSupply");
-        manifestConfig.maxSupply = json.readUint(".maxSupply");
+        manifestConfig.constructorSupply = vm.parseUint(json.readString(".constructorSupply"));
+        manifestConfig.maxSupply = vm.parseUint(json.readString(".maxSupply"));
         manifestConfig.expectedTokenAddress = json.readAddress(".expectedTokenAddress");
 
         // Explicit validation checks for global values
@@ -84,17 +84,25 @@ contract HelperConfig is Script {
         manifestConfig.targetAdmin = json.readAddress(string.concat(networkKey, ".targetAdmin"));
         manifestConfig.initialMintRecipient = json.readAddress(string.concat(networkKey, ".initialMintRecipient"));
         manifestConfig.expectedPostDeploymentSupply =
-            json.readUint(string.concat(networkKey, ".expectedPostDeploymentSupply"));
+            vm.parseUint(json.readString(string.concat(networkKey, ".expectedPostDeploymentSupply")));
 
         // Explicit validation checks for network values
         require(bytes(manifestConfig.rpcIdentifier).length > 0, "HelperConfig: rpcIdentifier cannot be empty");
         require(manifestConfig.targetAdmin != address(0), "HelperConfig: targetAdmin cannot be zero");
+        if (manifestConfig.expectedPostDeploymentSupply > 0) {
+            require(
+                manifestConfig.initialMintRecipient != address(0),
+                "HelperConfig: initialMintRecipient cannot be zero when expectedPostDeploymentSupply > 0"
+            );
+        }
     }
 
     function getManifestConfig() public view returns (ManifestConfig memory) {
         return manifestConfig;
     }
 
+    /// @dev Test utility — returns the subset of manifest parameters that affect the CREATE2 address.
+    ///      Not used in the deployment flow itself.
     function getDeterministicConstructorArgs()
         public
         view
