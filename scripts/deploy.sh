@@ -10,6 +10,7 @@
 #   ./scripts/deploy.sh                        # Uses defaults from .env
 #   RPC_URL=<url> ./scripts/deploy.sh          # Override RPC
 #   DRY_RUN=true ./scripts/deploy.sh           # Simulate without broadcasting
+#   ARTIFACT_PATH=<path> ./scripts/deploy.sh   # Use pre-compiled bytecode (e.g. out/Veera.sol/Veera.json)
 
 set -euo pipefail
 
@@ -56,11 +57,10 @@ echo "🔒 Running manifest integrity check..."
 bash "${SCRIPT_PATH}/verify-manifest-checksum.sh"
 echo ""
 
-forge script script/DeployVeera.s.sol \
-  --rpc-url ${RPC_URL} \
-  --sig "run()" \
-  --sender ${DEPLOYER_ADDRESS} \
+forge script "$SCRIPT_PATH/../script/DeployVeera.s.sol" \
+  --rpc-url "$RPC_URL" \
+  --sender "$DEPLOYER_ADDRESS" \
   --broadcast \
   --verify \
-  --etherscan-api-key ${ETHERSCAN_API_KEY} \
+  --etherscan-api-key "$ETHERSCAN_API_KEY" \
   ${HARDWARE}

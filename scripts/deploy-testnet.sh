@@ -14,6 +14,7 @@
 #   ./scripts/deploy-testnet.sh path/to/keystore             # Custom keystore
 #   ./scripts/deploy-testnet.sh path/to/keystore --verify    # With contract verification
 #   DRY_RUN=true ./scripts/deploy-testnet.sh                 # Simulate without broadcasting
+#   ARTIFACT_PATH=<path> ./scripts/deploy-testnet.sh         # Use pre-compiled bytecode
 
 set -euo pipefail
 
@@ -77,7 +78,7 @@ if [[ -n "${ETHERSCAN_API_KEY:-}" ]]; then
   VERIFY_FLAGS="--verify --etherscan-api-key $ETHERSCAN_API_KEY"
 fi
 
-forge script script/DeployVeera.s.sol:DeployVeera \
+forge script "$SCRIPT_PATH/../script/DeployVeera.s.sol" \
   --rpc-url "$RPC_URL" \
   --broadcast \
   --keystore "$KEYSTORE_PATH" \

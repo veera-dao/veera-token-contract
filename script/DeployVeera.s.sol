@@ -70,16 +70,28 @@ contract DeployVeera is Script {
         }
 
         // 3. Compute and validate predicted CREATE2 address
+        bytes memory bytecode;
+        string memory artifactPath = vm.envOr("ARTIFACT_PATH", string(""));
+
+        if (bytes(artifactPath).length > 0) {
+            bytecode = vm.getCode(artifactPath);
+            console.log("Using pre-compiled bytecode from:", artifactPath);
+        } else {
+            bytecode = type(Veera).creationCode;
+        }
+
         bytes memory creationCode = abi.encodePacked(
-            type(Veera).creationCode,
+            bytecode,
             abi.encode(
                 manifest.name, manifest.symbol, manifest.bootstrapAdmin, manifest.constructorSupply, manifest.maxSupply
             )
         );
         bytes32 initCodeHash = keccak256(creationCode);
-        address predicted = computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
+        address predicted = vm.computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
 
         console.log("--------------------------------------------------");
+        console.log("Init code hash:    ");
+        console.logBytes32(initCodeHash);
         console.log("Predicted address: ", predicted);
         console.log("Expected address:  ", manifest.expectedTokenAddress);
         console.log("--------------------------------------------------");
