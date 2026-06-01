@@ -20,10 +20,28 @@ contract DeployVeera is Script {
             require(deployerAddress == manifest.bootstrapAdmin, "Wrong deployer address in environment");
         }
 
-        // 2. Validate CREATE2 deployer/factory address and codehash
-        address expectedFactory = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
-        require(manifest.factory == expectedFactory, "Unsupported CREATE2 factory address");
+        // Validate manifest integrity (skip check on local anvil if bootstrapping mode is active)
+        if (block.chainid != 31337 || manifest.expectedTokenAddress != address(0)) {
+            bytes32 calculatedHash = keccak256(
+                abi.encode(
+                    manifest.salt,
+                    manifest.factory,
+                    manifest.factoryCodeHash,
+                    manifest.bootstrapAdmin,
+                    keccak256(bytes(manifest.name)),
+                    keccak256(bytes(manifest.symbol)),
+                    manifest.constructorSupply,
+                    manifest.maxSupply,
+                    manifest.expectedTokenAddress
+                )
+            );
+            require(
+                calculatedHash == 0x311293f824025683a250cb4e44e77b038d0013d8e23027c586246f3ed612426c,
+                "DeployVeera: Manifest integrity hash mismatch. Manifest parameters have been tampered with."
+            );
+        }
 
+        // 2. Validate CREATE2 deployer/factory bytecode
         uint256 codeSize;
         bytes32 codeHash;
         address fact = manifest.factory;
@@ -66,55 +84,74 @@ contract DeployVeera is Script {
             require(predicted == manifest.expectedTokenAddress, "Predicted address mismatch");
         }
 
-        // Pre-deploy check: verify that the token has not been deployed already
+        // Dry-run mode check
+        bool dryRun = vm.envOr("DRY_RUN", false);
+        if (dryRun) {
+            console.log("------------------ DRY RUN ACTIVE ----------------");
+            console.log("Would deploy Veera to predicted address: ", predicted);
+            console.log("Salt:                                    ", vm.toString(manifest.salt));
+            console.log("Bootstrap Admin:                         ", manifest.bootstrapAdmin);
+            console.log("Target Admin:                            ", manifest.targetAdmin);
+            console.log("Initial Supply:                          ", manifest.expectedPostDeploymentSupply);
+            console.log("--------------------------------------------------");
+            return (Veera(predicted), config);
+        }
+
+        // Pre-deploy check: verify if the token has been deployed already
         uint256 predictedCodeSize;
         assembly {
             predictedCodeSize := extcodesize(predicted)
         }
-        require(predictedCodeSize == 0, "Contract already deployed at predicted address");
 
-        // Start broadcast using the determined deployer signer path
-        if (isTest) {
-            vm.startPrank(deployerAddress);
+        Veera token;
+        if (predictedCodeSize > 0) {
+            console.log("INFO: Contract already deployed at predicted address:", predicted);
+            console.log("Skipping deployment to ensure idempotency.");
+            token = Veera(predicted);
         } else {
-            uint256 privateKey = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
-            if (privateKey != 0) {
-                address derived = vm.addr(privateKey);
-                require(derived == manifest.bootstrapAdmin, "Private key does not match bootstrapAdmin EOA");
-                vm.startBroadcast(privateKey);
+            // Start broadcast using the determined deployer signer path
+            if (isTest) {
+                vm.startPrank(deployerAddress);
             } else {
-                vm.startBroadcast(deployerAddress);
+                uint256 privateKey = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
+                if (privateKey != 0) {
+                    address derived = vm.addr(privateKey);
+                    require(derived == manifest.bootstrapAdmin, "Private key does not match bootstrapAdmin EOA");
+                    vm.startBroadcast(privateKey);
+                } else {
+                    vm.startBroadcast(deployerAddress);
+                }
             }
-        }
 
-        // 4. Deploy using CREATE2 for deterministic addressing via the factory
-        bytes memory deployData = abi.encodePacked(manifest.salt, creationCode);
-        (bool success, bytes memory returnedData) = manifest.factory.call(deployData);
-        require(success, "Failed to deploy via CREATE2 factory");
-        address deployedAddress = abi.decode(abi.encodePacked(bytes12(0), returnedData), (address));
-        require(deployedAddress == predicted, "Deployed address mismatch");
-        Veera token = Veera(deployedAddress);
+            // 4. Deploy using CREATE2 for deterministic addressing via the factory
+            bytes memory deployData = abi.encodePacked(manifest.salt, creationCode);
+            (bool success, bytes memory returnedData) = manifest.factory.call(deployData);
+            require(success, "Failed to deploy via CREATE2 factory");
+            address deployedAddress = abi.decode(abi.encodePacked(bytes12(0), returnedData), (address));
+            require(deployedAddress == predicted, "Deployed address mismatch");
+            token = Veera(deployedAddress);
 
-        // 5. Mint initial supply post-deployment only on home chain (when expectedPostDeploymentSupply > 0)
-        if (manifest.expectedPostDeploymentSupply > 0) {
-            console.log("Minting initial supply to:", manifest.initialMintRecipient);
-            token.mint(manifest.initialMintRecipient, manifest.expectedPostDeploymentSupply);
-        }
+            // 5. Mint initial supply post-deployment only on home chain (when expectedPostDeploymentSupply > 0)
+            if (manifest.expectedPostDeploymentSupply > 0) {
+                console.log("Minting initial supply to:", manifest.initialMintRecipient);
+                token.mint(manifest.initialMintRecipient, manifest.expectedPostDeploymentSupply);
+            }
 
-        // 6. Post-deployment Role Setup
-        console.log("Configuring target roles...");
-        token.grantRole(token.DEFAULT_ADMIN_ROLE(), manifest.targetAdmin);
+            // 6. Post-deployment Role Setup
+            console.log("Configuring target roles...");
+            token.grantRole(token.DEFAULT_ADMIN_ROLE(), manifest.targetAdmin);
 
-        // Revoke roles from temporary bootstrap admin
-        console.log("Revoking roles from bootstrap admin EOA...");
-        token.revokeRole(token.MINTER_ROLE(), manifest.bootstrapAdmin);
-        token.revokeRole(token.PAUSER_ROLE(), manifest.bootstrapAdmin);
-        token.revokeRole(token.DEFAULT_ADMIN_ROLE(), manifest.bootstrapAdmin);
+            // Revoke roles from temporary bootstrap admin
+            console.log("Revoking roles from bootstrap admin EOA...");
+            token.revokeRole(token.MINTER_ROLE(), manifest.bootstrapAdmin);
+            token.revokeRole(token.PAUSER_ROLE(), manifest.bootstrapAdmin);
+            token.revokeRole(token.DEFAULT_ADMIN_ROLE(), manifest.bootstrapAdmin);
 
-        if (isTest) {
-            vm.stopPrank();
-        } else {
-            vm.stopBroadcast();
+            if (isTest) {
+                vm.stopPrank();
+            } else {
+                vm.stopBroadcast();
+            }
         }
 
         // 7. Make role and supply handoff fail-closed

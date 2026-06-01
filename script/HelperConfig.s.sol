@@ -3,12 +3,6 @@ pragma solidity ^0.8.24;
 
 import {Script, stdJson} from "forge-std/Script.sol";
 
-uint256 constant BASE_MAINNET_CHAINID = 8453;
-uint256 constant BASE_TESTNET_CHAINID = 84532; // Sepolia
-uint256 constant BSC_MAINNET_CHAINID = 56;
-uint256 constant BSC_TESTNET_CHAINID = 97;
-uint256 constant LOCAL_CHAINID = 31337;
-
 contract HelperConfig is Script {
     using stdJson for string;
 
@@ -35,8 +29,26 @@ contract HelperConfig is Script {
 
     constructor() {
         string memory path = string.concat(vm.projectRoot(), "/deploy_manifest.json");
+
+        // Validate file existence
+        require(vm.exists(path), "HelperConfig: deploy_manifest.json file does not exist at project root");
+
         // forge-lint: disable-next-line(unsafe-cheatcode)
         string memory json = vm.readFile(path);
+
+        // Validate existence of all global deterministic parameters
+        require(vm.keyExistsJson(json, ".salt"), "HelperConfig: salt key missing in manifest");
+        require(vm.keyExistsJson(json, ".factory"), "HelperConfig: factory key missing in manifest");
+        require(vm.keyExistsJson(json, ".factoryCodeHash"), "HelperConfig: factoryCodeHash key missing in manifest");
+        require(vm.keyExistsJson(json, ".bootstrapAdmin"), "HelperConfig: bootstrapAdmin key missing in manifest");
+        require(vm.keyExistsJson(json, ".name"), "HelperConfig: name key missing in manifest");
+        require(vm.keyExistsJson(json, ".symbol"), "HelperConfig: symbol key missing in manifest");
+        require(vm.keyExistsJson(json, ".initialSupply"), "HelperConfig: initialSupply key missing in manifest");
+        require(vm.keyExistsJson(json, ".maxSupply"), "HelperConfig: maxSupply key missing in manifest");
+        require(
+            vm.keyExistsJson(json, ".expectedTokenAddress"),
+            "HelperConfig: expectedTokenAddress key missing in manifest"
+        );
 
         manifestConfig.salt = json.readBytes32(".salt");
         manifestConfig.factory = json.readAddress(".factory");
@@ -48,12 +60,35 @@ contract HelperConfig is Script {
         manifestConfig.maxSupply = json.readUint(".maxSupply");
         manifestConfig.expectedTokenAddress = json.readAddress(".expectedTokenAddress");
 
+        // Explicit validation checks for global values
+        require(manifestConfig.salt != bytes32(0), "HelperConfig: salt cannot be zero");
+        require(manifestConfig.factory != address(0), "HelperConfig: factory address cannot be zero");
+        require(manifestConfig.factoryCodeHash != bytes32(0), "HelperConfig: factoryCodeHash cannot be zero");
+        require(manifestConfig.bootstrapAdmin != address(0), "HelperConfig: bootstrapAdmin cannot be zero");
+        require(bytes(manifestConfig.name).length > 0, "HelperConfig: token name cannot be empty");
+        require(bytes(manifestConfig.symbol).length > 0, "HelperConfig: token symbol cannot be empty");
+        require(manifestConfig.maxSupply > 0, "HelperConfig: maxSupply must be greater than zero");
+
+        // Validate network configuration exists
         string memory networkKey = string.concat(".networks.", vm.toString(block.chainid));
+        require(
+            vm.keyExistsJson(json, networkKey),
+            string.concat(
+                "HelperConfig: Chain ID ",
+                vm.toString(block.chainid),
+                " is not configured in networks section of manifest"
+            )
+        );
+
         manifestConfig.rpcIdentifier = json.readString(string.concat(networkKey, ".rpcIdentifier"));
         manifestConfig.targetAdmin = json.readAddress(string.concat(networkKey, ".targetAdmin"));
         manifestConfig.initialMintRecipient = json.readAddress(string.concat(networkKey, ".initialMintRecipient"));
         manifestConfig.expectedPostDeploymentSupply =
             json.readUint(string.concat(networkKey, ".expectedPostDeploymentSupply"));
+
+        // Explicit validation checks for network values
+        require(bytes(manifestConfig.rpcIdentifier).length > 0, "HelperConfig: rpcIdentifier cannot be empty");
+        require(manifestConfig.targetAdmin != address(0), "HelperConfig: targetAdmin cannot be zero");
     }
 
     function getManifestConfig() public view returns (ManifestConfig memory) {

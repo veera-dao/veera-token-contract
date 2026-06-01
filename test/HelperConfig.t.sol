@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {HelperConfig, LOCAL_CHAINID} from "../script/HelperConfig.s.sol";
+import {HelperConfig} from "../script/HelperConfig.s.sol";
 
 contract HelperConfigTest is Test {
     function test_BaseMainnetConfig() public {
@@ -50,7 +50,7 @@ contract HelperConfigTest is Test {
     }
 
     function test_LocalConfigFallback() public {
-        vm.chainId(LOCAL_CHAINID);
+        vm.chainId(31337);
         HelperConfig config = new HelperConfig();
         HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
 
