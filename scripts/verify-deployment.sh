@@ -128,7 +128,7 @@ TOKEN_SYMBOL=$(cast call "$CONTRACT_ADDRESS" "symbol()(string)" --rpc-url "$BASE
 TOTAL_SUPPLY=$(cast call "$CONTRACT_ADDRESS" "totalSupply()(uint256)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
 CAP=$(cast call "$CONTRACT_ADDRESS" "cap()(uint256)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
 
-if [ "$TOKEN_NAME" == "\"Veera Token\"" ]; then
+if [ "$TOKEN_NAME" == "Veera Token" ]; then
     TOKEN_NAME_STATUS="${GREEN}${BOLD}✓ VERIFIED${NC}"
     TOKEN_NAME_EXPECTED=""
 else 
@@ -137,7 +137,7 @@ else
     ALL_VALIDATIONS_PASSED=false
 fi
 
-if [ "$TOKEN_SYMBOL" == "\"VEERA\"" ]; then
+if [ "$TOKEN_SYMBOL" == "VEERA" ]; then
     TOKEN_SYMBOL_STATUS="${GREEN}${BOLD}✓ VERIFIED${NC}"
     TOKEN_SYMBOL_EXPECTED=""
 else 
