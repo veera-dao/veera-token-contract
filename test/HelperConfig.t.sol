@@ -69,4 +69,80 @@ contract HelperConfigTest is Test {
         assertEq(name, "Veera Token");
         assertEq(symbol, "VEERA");
     }
+
+    function test_DeterministicConstructorArgs_MainnetsMatch() public {
+        // Retrieve Base Mainnet deterministic args
+        vm.chainId(8453);
+        HelperConfig baseConfig = new HelperConfig();
+        address mockDeployer = address(0x123);
+        (
+            string memory baseName,
+            string memory baseSymbol,
+            address baseConstructorAdmin,
+            uint256 baseConstructorSupply,
+            uint256 baseMaxSupply
+        ) = baseConfig.getDeterministicConstructorArgs(mockDeployer);
+
+        // Retrieve BSC Mainnet deterministic args
+        vm.chainId(56);
+        HelperConfig bscConfig = new HelperConfig();
+        (
+            string memory bscName,
+            string memory bscSymbol,
+            address bscConstructorAdmin,
+            uint256 bscConstructorSupply,
+            uint256 bscMaxSupply
+        ) = bscConfig.getDeterministicConstructorArgs(mockDeployer);
+
+        // Assert they are identical
+        assertEq(baseName, bscName);
+        assertEq(baseSymbol, bscSymbol);
+        assertEq(baseConstructorAdmin, bscConstructorAdmin);
+        assertEq(baseConstructorSupply, bscConstructorSupply);
+        assertEq(baseMaxSupply, bscMaxSupply);
+
+        // Assert supply is 0
+        assertEq(baseConstructorSupply, 0);
+
+        // Assert they match the expected mainnet values
+        assertEq(baseConstructorAdmin, mockDeployer);
+    }
+
+    function test_DeterministicConstructorArgs_TestnetsMatch() public {
+        // Retrieve Base Sepolia deterministic args
+        vm.chainId(84532);
+        HelperConfig baseConfig = new HelperConfig();
+        address mockDeployer = address(0x123);
+        (
+            string memory baseName,
+            string memory baseSymbol,
+            address baseConstructorAdmin,
+            uint256 baseConstructorSupply,
+            uint256 baseMaxSupply
+        ) = baseConfig.getDeterministicConstructorArgs(mockDeployer);
+
+        // Retrieve BSC Testnet deterministic args
+        vm.chainId(97);
+        HelperConfig bscConfig = new HelperConfig();
+        (
+            string memory bscName,
+            string memory bscSymbol,
+            address bscConstructorAdmin,
+            uint256 bscConstructorSupply,
+            uint256 bscMaxSupply
+        ) = bscConfig.getDeterministicConstructorArgs(mockDeployer);
+
+        // Assert they are identical
+        assertEq(baseName, bscName);
+        assertEq(baseSymbol, bscSymbol);
+        assertEq(baseConstructorAdmin, bscConstructorAdmin);
+        assertEq(baseConstructorSupply, bscConstructorSupply);
+        assertEq(baseMaxSupply, bscMaxSupply);
+
+        // Assert supply is 0
+        assertEq(baseConstructorSupply, 0);
+
+        // Assert they match the expected testnet values (unified testnet admin)
+        assertEq(baseConstructorAdmin, mockDeployer);
+    }
 }
