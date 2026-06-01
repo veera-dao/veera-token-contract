@@ -93,7 +93,7 @@ contract HelperConfigTest is Test {
         // Assert supply is 0
         assertEq(baseConstructorSupply, 0);
 
-        // Assert bootstrap admin is correct EOA
+        // Assert bootstrap admin matches manifest (update if manifest changes)
         assertEq(baseConstructorAdmin, 0x3188aF25805b403006c49e9D387FB17bb65A9f25);
     }
 
@@ -130,7 +130,7 @@ contract HelperConfigTest is Test {
         // Assert supply is 0
         assertEq(baseConstructorSupply, 0);
 
-        // Assert bootstrap admin is correct EOA
+        // Assert bootstrap admin matches manifest (update if manifest changes)
         assertEq(baseConstructorAdmin, 0x3188aF25805b403006c49e9D387FB17bb65A9f25);
     }
 }

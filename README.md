@@ -112,7 +112,7 @@ Before broadcasting, ensure the following are configured in `deploy_manifest.jso
 The JSON configuration file `deploy_manifest.json` acts as the single source of truth for the deployment. Proposing modifications to any global parameters (like `salt` or `bootstrapAdmin`) or changing network configurations must be done with caution.
 To guarantee manifest integrity and prevent unauthorized changes, the codebase implements two verification steps:
 1. **Solidity Code Integrity Hash:** The script `DeployVeera.s.sol` calculates the `keccak256` hash of the parsed global deterministic parameters and asserts that it matches `EXPECTED_MANIFEST_INTEGRITY_HASH`. Proposing a manifest change will require updating this code hash in `DeployVeera.s.sol`.
-2. **SHA-256 Checksum Validation:** The utility script `scripts/verify-manifest-checksum.sh` computes the SHA-256 hash of `deploy_manifest.json` and compares it against the approved checksum (`605b340f85590a56793828beacc9fc4525d3fa43d2ca61d8c71781d5800a4bbd`).
+2. **SHA-256 Checksum Validation:** The utility script `scripts/verify-manifest-checksum.sh` computes the SHA-256 hash of `deploy_manifest.json` and compares it against the approved checksum (`5b134cc4bf299289e9ab9bc6ae7c356faa1e3e29807f00d54811343e5b3c2435`).
 
 ### Predicted Addresses Per Chain
 With optimization enabled (Solidity 0.8.24, Cancun, 200 runs) and the standard Arachnid CREATE2 factory, the predicted token address is:

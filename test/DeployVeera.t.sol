@@ -9,7 +9,8 @@ import {Veera} from "../src/Veera.sol";
 contract DeployVeeraTest is Test {
     DeployVeera public deployer;
 
-    // Bootstrap admin EOA configured in deploy_manifest.json
+    // NOTE: These addresses must match deploy_manifest.json.
+    // Update these if the manifest changes.
     address public bootstrapAdmin = 0x3188aF25805b403006c49e9D387FB17bb65A9f25;
     address public expectedFactory = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
@@ -244,5 +245,29 @@ contract DeployVeeraTest is Test {
         assertEq(
             address(token), manifest.expectedTokenAddress, "Deployed token address should match manifest on BSC Mainnet"
         );
+    }
+
+    // Utility: Run with `forge test --match-test test_logManifestIntegrityHash -vvv` to recompute
+    // the manifest integrity hash after a legitimate manifest change.
+    function test_logManifestIntegrityHash() public {
+        vm.chainId(8453);
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        bytes32 calculatedHash = keccak256(
+            abi.encode(
+                manifest.salt,
+                manifest.factory,
+                manifest.factoryCodeHash,
+                manifest.bootstrapAdmin,
+                keccak256(bytes(manifest.name)),
+                keccak256(bytes(manifest.symbol)),
+                manifest.constructorSupply,
+                manifest.maxSupply,
+                manifest.expectedTokenAddress
+            )
+        );
+        console.log("Manifest Integrity Hash:");
+        console.logBytes32(calculatedHash);
     }
 }

@@ -5,43 +5,44 @@
   "bootstrapAdmin": "0x3188aF25805b403006c49e9D387FB17bb65A9f25",
   "name": "Veera Token",
   "symbol": "VEERA",
-  "initialSupply": 0,
-  "maxSupply": 1000000000000000000000000000,
+  "constructorSupply": "0",
+  "maxSupply": "1000000000000000000000000000",
   "expectedTokenAddress": "0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532",
   "compilerVersion": "0.8.24",
   "optimizer": true,
   "optimizerRuns": 200,
   "evmVersion": "cancun",
+  "viaIR": true,
   "networks": {
     "8453": {
       "rpcIdentifier": "base_mainnet",
       "targetAdmin": "0xd2b8875b840D3BD574E1e6b440888e110632A0FD",
       "initialMintRecipient": "0xd2b8875b840D3BD574E1e6b440888e110632A0FD",
-      "expectedPostDeploymentSupply": 1000000000000000000000000000
+      "expectedPostDeploymentSupply": "1000000000000000000000000000"
     },
     "56": {
       "rpcIdentifier": "bsc_mainnet",
       "targetAdmin": "0xd2b8875b840D3BD574E1e6b440888e110632A0FD",
       "initialMintRecipient": "0x0000000000000000000000000000000000000000",
-      "expectedPostDeploymentSupply": 0
+      "expectedPostDeploymentSupply": "0"
     },
     "84532": {
       "rpcIdentifier": "base_testnet",
       "targetAdmin": "0xfEDB58C317d347e265990888919879a5d392a12c",
       "initialMintRecipient": "0xfEDB58C317d347e265990888919879a5d392a12c",
-      "expectedPostDeploymentSupply": 1000000000000000000000000000
+      "expectedPostDeploymentSupply": "1000000000000000000000000000"
     },
     "97": {
       "rpcIdentifier": "bsc_testnet",
       "targetAdmin": "0x9FF0FB8e246ac58b17Acf9b7D43B76E2D2e6Bf03",
       "initialMintRecipient": "0x0000000000000000000000000000000000000000",
-      "expectedPostDeploymentSupply": 0
+      "expectedPostDeploymentSupply": "0"
     },
     "31337": {
       "rpcIdentifier": "local_anvil",
       "targetAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "initialMintRecipient": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "expectedPostDeploymentSupply": 1000000000000000000000000000
+      "expectedPostDeploymentSupply": "1000000000000000000000000000"
     }
   }
 }
