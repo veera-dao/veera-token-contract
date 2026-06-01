@@ -104,8 +104,17 @@ Before broadcasting, ensure the following are configured in `deploy_manifest.jso
 - `initialMintRecipient`: Recipient of the initial supply (home chain only).
 - `expectedPostDeploymentSupply`: Total supply expected post-execution (1B on Base, 0 on BSC).
 
----
+### Production Deployment (Pre-compiled Artifacts)
+For production deployments, it is recommended to use a pre-compiled bytecode artifact to ensure that local compiler versions or dependency changes do not affect the deployed bytecode.
 
+1. Generate or locate the audited artifact (e.g., `verified-artifacts/Veera.json`).
+2. Deploy using the `ARTIFACT_PATH` environment variable:
+```bash
+ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy.sh
+```
+The script will load the bytecode from the JSON file and append the constructor arguments defined in `deploy_manifest.json` dynamically.
+
+---
 ## 5. Deployment Management & Security Lifecycle
 
 ### Manifest File Maintenance

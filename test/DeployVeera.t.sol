@@ -42,7 +42,7 @@ contract DeployVeeraTest is Test {
             )
         );
         bytes32 initCodeHash = keccak256(creationCode);
-        return computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
+        return vm.computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
     }
 
     // 1. Base mainnet predicted address == BSC mainnet predicted address
@@ -97,7 +97,7 @@ contract DeployVeeraTest is Test {
             abi.encode(manifest.name, manifest.symbol, address(0xDEAD), manifest.constructorSupply, manifest.maxSupply)
         );
         bytes32 initCodeHash = keccak256(creationCode);
-        address predictedWithOtherAdmin = computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
+        address predictedWithOtherAdmin = vm.computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
 
         assertTrue(predictedWithAdmin != predictedWithOtherAdmin, "Changing bootstrap admin must change address");
     }
@@ -115,7 +115,7 @@ contract DeployVeeraTest is Test {
             abi.encode(manifest.name, manifest.symbol, manifest.bootstrapAdmin, 1000 ether, manifest.maxSupply)
         );
         bytes32 initCodeHash = keccak256(creationCode);
-        address predictedWithNonZeroSupply = computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
+        address predictedWithNonZeroSupply = vm.computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
 
         assertTrue(predictedWithZeroSupply != predictedWithNonZeroSupply, "Changing initial supply must change address");
     }
@@ -136,7 +136,7 @@ contract DeployVeeraTest is Test {
         bytes32 initCodeHash = keccak256(creationCode);
 
         bytes32 differentSalt = keccak256("DifferentSalt");
-        address predictedWithDifferentSalt = computeCreate2Address(differentSalt, initCodeHash, manifest.factory);
+        address predictedWithDifferentSalt = vm.computeCreate2Address(differentSalt, initCodeHash, manifest.factory);
 
         assertTrue(predictedWithSalt != predictedWithDifferentSalt, "Changing salt must change address");
     }
