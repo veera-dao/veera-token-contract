@@ -6,6 +6,17 @@ The architecture is designed with **security** and **future interoperability** (
 
 ---
 
+## 0. Deployments
+
+The $VEERA token contract is currently deployed on:
+
+* Base 
+    * [Mainnet](https://basescan.org/address/0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532) 
+    * [Testnet](https://sepolia.basescan.org/address/0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532)
+* BSC 
+    * [Mainnet](https://bscscan.com/address/0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532) 
+    * [Testnet](https://testnet.bscscan.com/address/0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532)
+
 ## 1. Architecture & Design Decisions
 
 ### Core Standards
