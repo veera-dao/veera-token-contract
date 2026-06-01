@@ -32,14 +32,16 @@ contract HelperConfig is Script {
 
     constructor() {
         address adminAddress;
-        uint256 initialSupply = INITIAL_SUPPLY;
+        uint256 initialSupply;
 
         if (block.chainid == BASE_MAINNET_CHAINID) {
             // Base Mainnet
             adminAddress = BASE_MAINNET_ADMIN;
+            initialSupply = INITIAL_SUPPLY;
         } else if (block.chainid == BASE_TESTNET_CHAINID) {
             // Base Testnet
             adminAddress = BASE_TESTNET_ADMIN;
+            initialSupply = INITIAL_SUPPLY;
         } else if (block.chainid == BSC_MAINNET_CHAINID) {
             // BSC Mainnet (initial supply set to 0 as the token is bridged)
             adminAddress = BSC_MAINNET_ADMIN;
@@ -51,6 +53,7 @@ contract HelperConfig is Script {
         } else {
             // Local / Anvil (Default Foundry Sender) (common known address)
             adminAddress = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+            initialSupply = INITIAL_SUPPLY;
         }
 
         // Validate zero addresses are not used
