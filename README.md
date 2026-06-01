@@ -1,183 +1,197 @@
-# Veera Token
+# Veera Token (`VEERA`)
 
-This repository contains the smart contracts for the Veera token. It is built using [Foundry](https://getfoundry.sh/) and [OpenZeppelin](https://www.openzeppelin.com/) standards.
+This repository contains the smart contracts for the **Veera Token**, a standardized, secure, and deterministic ERC20 implementation with access control, capping, pause capability, and permit support. It is built using [Foundry](https://getfoundry.sh/) and [OpenZeppelin](https://www.openzeppelin.com/) standards.
 
-The architecture is designed with **security** and **future interoperability** (native bridging) in mind.
+The architecture is designed with **security** and **future interoperability** (cross-chain native bridging) in mind.
 
-## 0. Deployments
-
-The token is deployed to the following chains:
-
-1. Base Mainnet [0xf9cc3c5ca95cc4d034216b41328ae0d6136053d6](https://basescan.org/address/0xf9cc3c5ca95cc4d034216b41328ae0d6136053d6)
-2. Base Sepolia [0xb8df343bb4b648732c2c90df3276f97e46ee0bea](https://sepolia.basescan.org/address/0xb8df343bb4b648732c2c90df3276f97e46ee0bea)
+---
 
 ## 1. Architecture & Design Decisions
 
 ### Core Standards
 * **ERC20:** Standard fungible token implementation.
 * **ERC20Burnable:** Allows supply to be managed. This is **critical** for future cross-chain bridging (Lock-and-Mint / Burn-and-Mint).
-* **ERC20Permit:** Enables gasless approvals (EIP-2612), enabling sponsored gas fees for a seamless UX.
-* **ERC20Pausable:** *Not in use.* Emergency stop mechanism to freeze transfers in the event of a critical security incident. **Note:** Pausing only affects token transfers; minting and burning operations continue to function normally.
+* **ERC20Permit:** Enables gasless approvals (EIP-2612) for a seamless UX.
+* **ERC20Pausable:** Emergency stop mechanism to freeze transfers in the event of a critical security incident. Note that pausing only affects transfers; minting and burning remain unaffected.
+* **ERC20Capped:** Hard cap of 1 Billion tokens ($10^{27}$ wei) to prevent inflation.
 
 ### Access Control Strategy
-
-We use `AccessControl` instead of `Ownable` to prevent "Vendor Lock-in" with bridge providers. This decoupling allows us to grant specific permissions to external protocols without surrendering admin control.
+We use OpenZeppelin `AccessControl` instead of `Ownable` to prevent "vendor lock-in" with bridge providers. This decoupling allows us to grant specific permissions to external protocols without surrendering admin control.
 
 | Role | Intended Holder | Capabilities |
 | :--- | :--- | :--- |
 | **DEFAULT_ADMIN_ROLE** | **Gnosis Safe** | Can grant/revoke roles. The supreme authority. |
-| **MINTER_ROLE** | **Gnosis Safe** | Can mint new tokens. |
-| **MINTER_ROLE** (Future) | **Bridge Adapter** | Future bridges will be granted this role to burn/mint tokens when bridging to/from other chains. |
-| **PAUSER_ROLE** (Disabled) | **Gnosis Safe** | Can pause/unpause all token transfers. |
+| **MINTER_ROLE** | **Bridge Adapter** | Granted to bridge contracts (like LayerZero OFT adapters) to handle minting when bridging. |
+| **PAUSER_ROLE** | **Multisig / Guard** | Can pause/unpause all token transfers. |
 
 ---
 
-## 2. Configuration
+## 2. Deterministic CREATE2 Deployment Workflow
 
-### Environment Variables
-Copy `.env.example` to `.env` and set the following:
+To achieve identical contract addresses across multiple EVM chains (e.g., Base and BSC, mainnet and testnet) using `CREATE2`, the deployer factory, the deployment salt, and the creation bytecode (which includes constructor arguments) must be **completely invariant**.
 
-* `BASE_RPC_URL`: Connection to the Base network.
-* `ETHERSCAN_API_KEY`: Used to verify the source code on BaseScan.
+### Deterministic Inputs
 
-### Hardcoded Parameters
+| Input Parameter | Value | Description |
+| :--- | :--- | :--- |
+| **CREATE2 Factory** | `0x4e59b44847b379578588920cA78FbF26c0B4956C` | Standard keyless Arachnid Deterministic Deployment Proxy. |
+| **Salt** | `0xe2713982c0efe119dc5260cee9928c24af6cc4c4dcbc5f5bdb83a77932c80847` | Salt used to offset the deployment address. |
+| **Token Name** | `"Veera Token"` | Constructor argument: Name of the ERC20 token. |
+| **Token Symbol** | `"VEERA"` | Constructor argument: Symbol of the ERC20 token. |
+| **Bootstrap Admin** | `0x3188aF25805b403006c49e9D387FB17bb65A9f25` | Constructor argument: Temporary global admin EOA. |
+| **Constructor Supply** | `0` | Constructor argument: Must be strictly 0 on all chains. |
+| **Max Supply** | `1_000_000_000` ($10^{27}$ wei) | Constructor argument: Total supply cap (1 Billion tokens). |
 
-The following immutable values are defined in `script/HelperConfig.s.sol`:
-* **Name:** `Veera Token`
-* **Symbol:** `VEERA`
-* **Initial Supply:** `1,000,000,000` (Minted to the Admin immediately)
-* **Maximum Supply Cap:** `1,000,000,000` (Same as initial supply, prevents unlimited inflation, [enforced by ERC20Capped](src/Veera.sol#L36))
-* **Initial Admin:** `EVM_ADDRESS` Chain specific address. Must be a Gnosis Safe for Mainnet. **Must be checksummed.**
+> [!NOTE]
+> **Custom CREATE2 Factories:** While `0x4e59b44847b379578588920cA78FbF26c0B4956C` is the industry-standard Arachnid keyless CREATE2 factory, the JSON manifest allows specifying a custom factory address under the `"factory"` key, as well as its codehash under `"factoryCodeHash"`.
 
-*NOTE:* Ensure all addresses are in EIP-55 format to avoid compiler errors.
----
+### Deterministic Target Address
 
-## 3. Deployment Process (Production)
+When the above parameters are compiled with Solidity **0.8.24** (using Cancun EVM, optimization enabled at 200 runs), the resulting deterministic CREATE2 contract address is:
 
-**Security Strategy:** "Sealed Script"  
-We utilize a hardcoded configuration in [script/HelperConfig.s.sol](script/HelperConfig.s.sol) rather than environment variables. This ensures that the deployed bytecode contains the **exact** admin address and token parameters agreed upon during the audit, with zero risk of "fat-finger" errors during the deployment command.
-
-### Prerequisites
-* **Hardware Wallet:** A Ledger or Trezor initialized and connected.
-* **Gnosis Safe:** A Safe deployed on Base Mainnet to act as the Admin.
-* **ETH:** Approximately 0.05 ETH on Base Mainnet on the **Hardware Wallet** address (to pay for gas). The Safe does *not* need ETH to receive the role.
-* **API Keys:** A valid BaseScan API key for verification.
+$$\mathbf{0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532}$$
 
 ---
 
-### Phase 1: Code Freeze & Audit (The "Seal")
-**Actor:** Verifier (Person B) & Deployer (Person A)
+## 3. Role of the Bootstrap Admin EOA
 
-Before running any commands, both parties must verify the "Truth" source in the code.
+A common pitfall in EVM deployments is feeding `tx.origin` or `msg.sender` directly into the constructor to establish initial admin roles. Because the broadcasting wallet can differ between chains (or if different engineers run the scripts), this introduces variability in the constructor arguments, altering the initialization bytecode hash and resulting in different contract addresses.
 
-1.  **Pull the Release Candidate:**
-    ```bash
-    git checkout main
-    git pull
-    ```
-2.  **Audit the Config File:** Open `script/HelperConfig.s.sol` and verify the **Base Mainnet (8453)** section:
-    * **Line 26 (Admin):** Ensure `adminAddress = 0x...` matches the **Production Gnosis Safe** exactly.
-    * **Line 18-20 (Constants):** Verify `NAME`, `SYMBOL`, and `INITIAL_SUPPLY` match the product spec.
-3.  **Lock the Release:**
-    If the config is correct, create a git tag to mark this specific version of the bytecode.
-    ```bash
-    git tag v1.0.0
-    git push origin v1.0.0
-    ```
+To prevent this:
+1. The **Bootstrap Admin EOA** (`0x3188aF25805b403006c49e9D387FB17bb65A9f25`) is hardcoded as the initial admin in the constructor arguments across all chains.
+2. The deployment script **enforces** that the broadcaster of the deployment transaction matches this EOA.
+3. At the end of the deployment transaction, the Bootstrap Admin EOA **grants the `DEFAULT_ADMIN_ROLE`** to the actual target address (`targetAdmin`) and **renounces/revokes all its own roles**.
+4. Both **`PAUSER_ROLE` and `MINTER_ROLE` are left completely unassigned post-deployment** on all chains. The `targetAdmin` can grant these roles later (e.g. to a bridge adapter or emergency pause multisig).
+5. Consequently, **the Bootstrap Admin retains 0 privileges** post-deployment.
 
 ---
 
-### Phase 2: Execution (The Deployment)
-**Actor:** Deployer (Person A)
+## 4. Deployment Script Execution
 
-This step deploys the contract using a hardware wallet. The hardware wallet pays the gas fees but **will not** receive any admin permissions.
+The deployment is managed by `DeployVeera.s.sol`, which leverages `HelperConfig.s.sol` to parse `deploy_manifest.json` for chain-specific parameters.
 
-1.  **Connect Hardware Wallet:**
-    * Plug in your hardware wallet.
-    * Unlock the device with your PIN.
-    * Open the **Ethereum App** on the device.
-    * Ensure "Blind Signing" is enabled in the Ethereum App settings (required for smart contract deployment).
+### Step-by-Step Execution Flow
 
-2.  **Set Environment Variables:**
-    ```bash
-    export BASE_RPC_URL=[https://mainnet.base.org](https://mainnet.base.org)
-    export ETHERSCAN_API_KEY=ABC123ABC123...
-    export HARDWARE=--ledger
-    export DEPLOYER_ADDRESS=0x000...
-    ```
-
-    1. For testnet deployments, set `BASE_RPC_URL` to `https://sepolia.base.org`
-    2. Set `HARDWARE` to either `--ledger` for `--trezor`.
-    3. Set `DEPLOYER_ADDRESS` to the address of the connected hardware wallet.
-
-3.  **Run the Deployment Command:**
-    ```bash
-    forge script script/DeployVeera.s.sol \
-      --rpc-url ${BASE_RPC_URL} \
-      --sig "run()" \
-      --sender ${DEPLOYER_ADDRESS} \
-      --broadcast \
-      --verify \
-      --etherscan-api-key ${ETHERSCAN_API_KEY} \
-      ${HARDWARE}
-    ```
-
-    **Flag Explanations:**
-    * `--ledger` / `--trezor`: Tells Foundry to sign using the USB device.
-    * `--broadcast`: Actually sends the transaction to the network (costs real ETH).
-    * `--verify`: Uploads the source code to BaseScan immediately.
-
-4.  **Sign on Device:**
-    * Foundry will compile the code and simulate the transaction.
-    * Your device will prompt to `Review Transaction`.
-    * **Verify Chain ID:** Ensure the screen says `Chain ID: 8453` (Base mainnet).
-    * **Approve:** detailed transaction data will likely be blind, but you are confirming the deployment cost.
-
----
-
-### Phase 3: Ratification (The Check)
-**Actor:** Verifier (Person B)
-
-Do not consider the token "Live" until this step is complete.
-
-1.  **Locate Contract:**
-    * Copy the `Contract Address` from the terminal output of Phase 2.
-    * Go to [BaseScan.org](https://basescan.org) and paste the address.
-2.  **Verify Source Code:**
-    * Click the **Contract** tab.
-    * Ensure it has a Green Checkmark (Verified).
-    * *Critical:* Click "Read Contract" -> `DEFAULT_ADMIN_ROLE`. Copy the output hash.
-3.  **Verify Permissions:**
-    * In "Read Contract", look for `hasRole`.
-    * **Test 1 (Success):** Enter `DEFAULT_ADMIN_ROLE` hash and the **Gnosis Safe Address**. Result must be `true`.
-    * **Test 2 (Failure):** Enter `DEFAULT_ADMIN_ROLE` hash and the **Deployer (Ledger) Address**. Result must be `false`.
-
-**Status:** If Phase 3 passes, the token is secure and considered deployed.
-
----
-
-### Phase 4: Automated Verification (Optional)
-
-**Actor:** Verifier (Person B) or Deployer (Person A)
-
-For additional verification, you can use the automated verification script:
-
-```bash
-./scripts/verify-deployment.sh <CONTRACT_ADDRESS> <EXPECTED_ADMIN_ADDRESS>
+```mermaid
+graph TD
+    A[Start script] --> B{Verify tx.origin == Bootstrap Admin}
+    B -- No --> C[Revert: Unauthorized broadcaster]
+    B -- Yes --> D{Verify Factory Deployed & bytecode matches factoryCodeHash}
+    D -- No --> E[Revert: Factory missing/invalid]
+    D -- Yes --> D2{Verify targetAdmin Deployed}
+    D2 -- No --> E2[Revert: targetAdmin contract missing]
+    D2 -- Yes --> F[Predict address off-chain]
+    F --> G{Predicted Address == expectedTokenAddress?}
+    G -- No --> H[Revert: Address mismatch]
+    G -- Yes --> H2{Verify contract not already deployed}
+    H2 -- No --> E3[Revert: Contract already exists]
+    H2 -- Yes --> I[Start Broadcast]
+    I --> J[Deploy Veera via CREATE2]
+    J --> K{Home chain?}
+    K -- Yes --> L[Mint initial supply to target recipient]
+    K -- No --> M[Skip initial minting]
+    L --> N[Configure targetAdmin role & revoke bootstrap roles]
+    M --> N
+    N --> O[Stop Broadcast]
+    O --> P[Assert Role & Supply constraints - Fail-Closed]
+    P --> Q[Deployment Verified & Finalized]
 ```
 
-This script will:
-- Verify token metadata (name, symbol, supply, cap)
-- Check that the expected admin has `DEFAULT_ADMIN_ROLE`
-- Confirm the deployer does NOT have admin role
-- Check pause status
-- Validate all role assignments
+### Pre-Deployment Checklist
 
-**Note:** The script requires `cast` (part of Foundry) and the `BASE_RPC_URL` environment variable.
+Before broadcasting, ensure the following are configured in `deploy_manifest.json` under the specific target chain ID:
+- `targetAdmin`: Recipient of the default admin role. Must be a deployed Gnosis Safe contract address.
+- `initialMintRecipient`: Recipient of the initial supply (home chain only).
+- `expectedPostDeploymentSupply`: Total supply expected post-execution (1B on Base, 0 on BSC).
 
 ---
 
-## 4. Gas Considerations
+## 5. Deployment Management & Security Lifecycle
+
+### Manifest File Maintenance
+The JSON configuration file `deploy_manifest.json` acts as the single source of truth for the deployment. Proposing modifications to any global parameters (like `salt` or `bootstrapAdmin`) or changing network configurations must be done with caution.
+To guarantee manifest integrity and prevent unauthorized changes, the codebase implements two verification steps:
+1. **Solidity Code Integrity Hash:** The script `DeployVeera.s.sol` calculates the `keccak256` hash of the parsed global deterministic parameters and asserts that it matches `EXPECTED_MANIFEST_INTEGRITY_HASH`. Proposing a manifest change will require updating this code hash in `DeployVeera.s.sol`.
+2. **SHA-256 Checksum Validation:** The utility script `scripts/verify-manifest-checksum.sh` computes the SHA-256 hash of `deploy_manifest.json` and compares it against the approved checksum (`5b134cc4bf299289e9ab9bc6ae7c356faa1e3e29807f00d54811343e5b3c2435`).
+
+### Predicted Addresses Per Chain
+With optimization enabled (Solidity 0.8.24, Cancun, 200 runs) and the standard Arachnid CREATE2 factory, the predicted token address is:
+* **All Networks (Base & BSC Mainnet/Testnet):** `0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532`
+* **Local Anvil (Chain ID 31337):** Matches the above address if the default parameters are used, but can be set to `address(0)` in the manifest for local development/testing.
+
+### Bootstrap Process & Security Assumptions
+1. **Signer Ownership:** The Bootstrap Admin EOA (`0x3188aF25805b403006c49e9D387FB17bb65A9f25`) acts as a temporary bootstrap owner. It must sign the deployment script.
+2. **Zero-Trust Transfer:** In the same deployment flow, all initial roles are transferred to the Gnosis Safe multisig `targetAdmin` contract, and the Bootstrap Admin renounces all its roles. Post-deployment, the Bootstrap Admin holds zero roles or privileges.
+3. **Pausable and Minter Invariance:** `PAUSER_ROLE` and `MINTER_ROLE` are intentionally left unassigned post-deployment. The Gnosis Safe `targetAdmin` is the only entity that can grant these roles subsequently.
+
+### Post-Deployment Verification Steps
+After running the script, verify the deployed contract state:
+1. **Run Checksum Verification:** Use `./scripts/verify-manifest-checksum.sh` to ensure the manifest was not modified during the deployment.
+2. **Run Post-Deployment Script:** Execute `scripts/verify-deployment.sh` against the deployed token address:
+   ```bash
+   ./scripts/verify-deployment.sh 0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532 <EXPECTED_TARGET_ADMIN_ADDRESS>
+   ```
+   This script performs on-chain queries to verify the metadata, supply, role setup, and checks that the bootstrap EOA has no roles left.
+
+---
+
+## 6. Operational Run Commands
+
+### 1. Dry Run (Local Simulation)
+Simulate the deployment locally on an Anvil fork or local node. You can also specify the `DRY_RUN=true` environment variable to simulate address prediction and parsing logic without triggering any transaction broadcast:
+```bash
+# Start anvil locally
+anvil
+
+# Run script simulation
+forge script script/DeployVeera.s.sol \
+  --rpc-url http://localhost:8545 \
+  --sender 0x3188aF25805b403006c49e9D387FB17bb65A9f25 \
+  --unlocked
+```
+
+### 2. Mainnet / Testnet Deployment
+To perform the live deployment on a network (e.g. Base Sepolia), configure your environment variables in `.env`:
+```bash
+DEPLOYER_ADDRESS=0x3188aF25805b403006c49e9D387FB17bb65A9f25
+DEPLOYER_PRIVATE_KEY=0x... # (Or leave unset if signing interactively / using ledger)
+```
+Run the following command using the private key / hardware wallet of the Bootstrap Admin:
+```bash
+forge script script/DeployVeera.s.sol \
+  --rpc-url <YOUR_RPC_URL> \
+  --broadcast \
+  --interactive \
+  --sender 0x3188aF25805b403006c49e9D387FB17bb65A9f25 \
+  --verify
+```
+
+---
+
+## 7. Security, targetAdmin Validation, & Recovery
+
+### Gnosis Safe validation
+To prevent operational errors, the script validates that the `targetAdmin` is a **contract address** (i.e., Gnosis Safe or multisig vault) by performing an `extcodesize` check on live networks (bypassed on local anvil chain `31337`). If no code is deployed at `targetAdmin` on the target chain, the transaction will revert before broadcasting.
+
+### Fail-Closed Assertions & Verification
+Because the script performs multiple separate broadcasted calls (deployment, minting, role setups), a failure in the final verification step does not automatically roll back prior completed transactions on-chain. However, the script executes post-deployment checks at the end of its run to ensure the final state strictly matches all security criteria:
+* If the total supply on a remote chain (like BSC) is non-zero, the script fails.
+* If the bootstrap EOA retains `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE`, or `PAUSER_ROLE`, the script fails.
+* If the target admin does not have `DEFAULT_ADMIN_ROLE` assigned, the script fails.
+* If the target admin (or any other address other than what's expected) has `PAUSER_ROLE` or `MINTER_ROLE` assigned post-deployment, the script fails.
+
+The practical guarantee is that if any check fails, the script fails verification and prevents a successful deployment run from being accepted or recorded as valid.
+
+### Interrupted Deployment Recovery
+If a transaction fails or reverts midway, or if the factory is missing on a specific network, follow these recovery steps:
+1. **Ensure Factory Existence:** If the Arachnid CREATE2 factory is not deployed on a new chain, deploy it keylessly using the transaction raw data from the official [Arachnid Proxy Repository](https://github.com/Arachnid/deterministic-deployment-proxy).
+2. **Ensure targetAdmin Deployment:** Confirm that the Gnosis Safe or contract vault designated as `targetAdmin` has been deployed on the target chain.
+3. **Review Gas & Nonces:** Ensure the Bootstrap Admin EOA has sufficient funds for gas on all networks and that no pending transactions are blocking the nonces.
+4. **Verify Manifest Checksum:** Always inspect `deploy_manifest.json` to ensure the EIP-55 checksum of the target addresses matches the configuration.
+
+---
+
+## 8. Gas Considerations
 
 The Veera token contract uses multiple OpenZeppelin extensions, which affects gas costs. Approximate gas costs for common operations:
 
@@ -190,151 +204,34 @@ The Veera token contract uses multiple OpenZeppelin extensions, which affects ga
 | **Permit** | ~80,000 | Gasless approval via EIP-2612 |
 | **Pause/Unpause** | ~45,000 | Role-checked pause operation |
 
-**Note:** Actual gas costs may vary based on network conditions and contract state. These estimates are for reference only.
-
 ---
 
-## 5. Contract Size Monitoring
+## 9. Contract Size Monitoring
 
-The Veera contract uses multiple OpenZeppelin extensions, which increases contract size. The current configuration uses:
-
-- **Optimizer:** Enabled with 200 runs
-- **Target EVM Version:** Prague
-- **Via IR:** Disabled
-
-**Contract Size Limit:** Ethereum has a 24KB (24,576 bytes) contract size limit for runtime bytecode. Monitor the compiled contract size using:
+Ethereum has a 24KB (24,576 bytes) contract size limit for runtime bytecode. Monitor the compiled contract size using:
 
 ```bash
 forge build --sizes
 ```
 
-### Current Contract Sizes
-
-As of the latest build:
-
-| Metric | Size | Margin |
-| :--- | :--- | :--- |
-| **Runtime Bytecode** | 5,622 bytes | 18,954 bytes |
-| **Initcode** | 7,929 bytes | 41,223 bytes |
-
 ---
 
-## 6. Role Management
-
-After deployment, the Gnosis Safe (admin) can manage roles using the standard AccessControl functions.
-
-### Granting Roles
-
-To grant the `MINTER_ROLE` to a bridge adapter or other contract:
-
-```solidity
-// Using Gnosis Safe interface or cast command
-token.grantRole(MINTER_ROLE, bridgeAdapterAddress);
-```
-
-### Revoking Roles
-
-To revoke a role:
-
-```solidity
-token.revokeRole(MINTER_ROLE, bridgeAdapterAddress);
-```
-
-### Best Practices
-
-1. **Use Gnosis Safe:** Always perform role management through the Gnosis Safe multisig, never from an EOA.
-2. **Verify Addresses:** Double-check addresses before granting roles to prevent mistakes.
-3. **Document Changes:** Keep a record of all role grants/revocations for audit purposes.
-4. **Test First:** Test role changes on testnet before applying to mainnet.
-5. **Time-Lock Consideration:** For critical roles, consider implementing a time-lock (future enhancement).
-
-### Role Identifiers
-
-- `DEFAULT_ADMIN_ROLE`: `0x0000000000000000000000000000000000000000000000000000000000000000`
-- `MINTER_ROLE`: `keccak256("MINTER_ROLE")`
-- `PAUSER_ROLE`: `keccak256("PAUSER_ROLE")`
-
-You can query role identifiers using:
-```bash
-cast call <TOKEN_ADDRESS> "MINTER_ROLE()(bytes32)" --rpc-url $BASE_RPC_URL
-```
-
----
-
-## 7. Upgradeability
-
-**Important:** The Veera token contract is **not upgradeable**. It uses standard constructors and cannot be modified after deployment.
-
-### Implications
-
-- **Immutable Logic:** Contract logic cannot be changed after deployment
-- **No Proxy Pattern:** The contract does not use a proxy pattern (e.g., UUPS, Transparent, Beacon)
-- **Permanent Configuration:** Token parameters (name, symbol, cap) are set at deployment and cannot be changed
-
-### Why Non-Upgradeable?
-
-1. **Security:** Reduces attack surface by eliminating proxy-related vulnerabilities
-2. **Simplicity:** Simpler architecture reduces complexity and potential bugs
-3. **Trust:** Users can verify the contract code will never change
-4. **Gas Efficiency:** No proxy overhead means lower gas costs
-
----
-
-## 8. Gas Cost Explanations
-
-The gas costs listed in Section 4 are influenced by several factors:
-
-| Operation | Gas Cost Factors |
-| :--- | :--- |
-| **Transfer** | Base ERC20 (~21k) + Pausable check (~5k) + Storage updates (~25k) |
-| **Mint** | Transfer gas + Role check (~10k) + Cap validation (~5k) |
-| **Burn** | Base ERC20 (~21k) + Storage updates (~9k) |
-| **Approve** | Base ERC20 (~21k) + Storage updates (~25k) |
-| **Permit** | EIP-712 signature verification (~45k) + Storage updates (~35k) |
-| **Pause/Unpause** | Role check (~10k) + State change (~35k) |
-
-**Note:** These are approximate values. Actual costs depend on:
-- Current storage slot state (cold vs warm access)
-- Network congestion
-- EIP-1559 base fee
-- Contract state (paused/unpaused)
-
----
-
-## 9. Integration Testing
+## 10. Integration Testing
 
 After deploying the contract, you can run comprehensive integration tests to verify all functionality on the deployed instance.
-
-### Overview
-
-The integration test suite is a TypeScript-based testing framework that validates:
-
-- ERC20 standard operations (transfer, approve, allowance, transferFrom)
-- ERC20Permit (gasless approvals with EIP-712 signatures)
-- Minting operations (success, cap enforcement, zero address checks)
-- Burning operations (burn, burnFrom, insufficient balance handling)
-- Pausing operations (pause/unpause, verify operations are blocked/resumed)
-- Access control (role management, permission verification)
-- Edge cases (zero address, insufficient balance/allowance, boundary conditions)
 
 ### Quick Start
 
 1. **Navigate to integration tests directory:**
-
    ```bash
    cd integration-tests
    ```
-
 2. **Install dependencies:**
-
    ```bash
    npm install
    ```
-
 3. **Configure environment variables:**
-
    Add the following to your `.env` file (in the project root):
-
    ```bash
    # Required
    BASE_RPC_URL=https://sepolia.base.org
@@ -343,58 +240,8 @@ The integration test suite is a TypeScript-based testing framework that validate
    ADMIN_PRIVATE_KEY=0x... # Admin private key
    TEST_USER_ADDRESS=0x... # Test user address
    TEST_USER_PRIVATE_KEY=0x... # Test user private key
-
-   # Optional (for role testing)
-   MINTER_ADDRESS=0x...
-   MINTER_PRIVATE_KEY=0x...
-   PAUSER_ADDRESS=0x...
-   PAUSER_PRIVATE_KEY=0x...
    ```
-
 4. **Run tests:**
-
    ```bash
    npm test
    ```
-
-### Prerequisites
-
-- Node.js v18 or higher
-- npm or yarn
-- Test accounts with sufficient ETH for gas fees
-- Deployed contract address
-
-### Test Account Setup
-
-You'll need at least two test accounts:
-
-1. **Admin Account**: Must have `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE`, and `PAUSER_ROLE`
-   - Used for minting, pausing, and role management
-   - Must have sufficient ETH for gas
-
-2. **Test User Account**: Regular user account
-   - Used for transfers, approvals, receiving tokens
-   - Must have sufficient ETH for gas
-
-Optional accounts (for comprehensive role testing):
-- **Minter Account**: Will be granted `MINTER_ROLE` during tests
-- **Pauser Account**: Will be granted `PAUSER_ROLE` during tests
-
-### Test Output
-
-The test suite provides detailed output showing:
-- Individual test results (✓ pass, ✗ fail)
-- Transaction hashes for on-chain verification
-- Per-suite summary
-- Overall summary with pass/fail counts
-
-### Documentation
-
-For detailed documentation, see [integration-tests/README.md](integration-tests/README.md).
-
-### Security Notes
-
-- **Never commit private keys**: Use environment variables or secure key management
-- **Test on testnet first**: Always test on testnet before mainnet
-- **Verify contract address**: Double-check the contract address before running tests
-- **Use separate accounts**: Don't use production accounts for testing

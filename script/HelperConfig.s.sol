@@ -1,63 +1,123 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Script} from "forge-std/Script.sol";
-
-uint256 constant BASE_MAINNET_CHAINID = 8453;
-uint256 constant BASE_TESTNET_CHAINID = 84532; // Sepolia
-uint256 constant BSC_MAINNET_CHAINID = 56;
-uint256 constant BSC_TESTNET_CHAINID = 97;
-uint256 constant LOCAL_CHAINID = 31337;
-
-address constant BASE_MAINNET_ADMIN = 0xd2b8875b840D3BD574E1e6b440888e110632A0FD;
-address constant BASE_TESTNET_ADMIN = 0xfEDB58C317d347e265990888919879a5d392a12c;
-address constant BSC_MAINNET_ADMIN = BASE_MAINNET_ADMIN;
-address constant BSC_TESTNET_ADMIN = 0x9FF0FB8e246ac58b17Acf9b7D43B76E2D2e6Bf03;
+import {Script, stdJson} from "forge-std/Script.sol";
 
 contract HelperConfig is Script {
-    struct NetworkConfig {
-        address initialAdmin;
-        uint256 initialSupply;
-        uint256 maxSupply;
+    using stdJson for string;
+
+    struct ManifestConfig {
+        // Global deterministic parameters (affecting CREATE2 address)
+        bytes32 salt;
+        address factory;
+        bytes32 factoryCodeHash;
+        address bootstrapAdmin;
         string name;
         string symbol;
+        uint256 constructorSupply;
+        uint256 maxSupply;
+        address expectedTokenAddress;
+
+        // Per-chain target parameters (configured post-deployment)
+        string rpcIdentifier;
+        address targetAdmin;
+        address initialMintRecipient;
+        uint256 expectedPostDeploymentSupply;
     }
 
-    NetworkConfig public activeNetworkConfig;
-
-    string constant NAME = "Veera Token";
-    string constant SYMBOL = "VEERA";
-    uint256 constant INITIAL_SUPPLY = 1_000_000_000 ether;
-    uint256 constant MAX_SUPPLY = INITIAL_SUPPLY;
+    ManifestConfig public manifestConfig;
 
     constructor() {
-        address adminAddress;
-        uint256 initialSupply = INITIAL_SUPPLY;
+        string memory path = string.concat(vm.projectRoot(), "/deploy_manifest.json");
 
-        if (block.chainid == BASE_MAINNET_CHAINID) {
-            // Base Mainnet
-            adminAddress = BASE_MAINNET_ADMIN;
-        } else if (block.chainid == BASE_TESTNET_CHAINID) {
-            // Base Testnet
-            adminAddress = BASE_TESTNET_ADMIN;
-        } else if (block.chainid == BSC_MAINNET_CHAINID) {
-            // BSC Mainnet (initial supply set to 0 as the token is bridged)
-            adminAddress = BSC_MAINNET_ADMIN;
-            initialSupply = 0 ether;
-        } else if (block.chainid == BSC_TESTNET_CHAINID) {
-            // BSC Testnet (initial supply set to 0 as the token is bridged)
-            adminAddress = BSC_TESTNET_ADMIN;
-            initialSupply = 0 ether;
-        } else {
-            // Local / Anvil (Default Foundry Sender) (common known address)
-            adminAddress = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+        // Validate file existence
+        require(vm.exists(path), "HelperConfig: deploy_manifest.json file does not exist at project root");
+
+        // forge-lint: disable-next-line(unsafe-cheatcode)
+        string memory json = vm.readFile(path);
+
+        // Validate existence of all global deterministic parameters
+        require(vm.keyExistsJson(json, ".salt"), "HelperConfig: salt key missing in manifest");
+        require(vm.keyExistsJson(json, ".factory"), "HelperConfig: factory key missing in manifest");
+        require(vm.keyExistsJson(json, ".factoryCodeHash"), "HelperConfig: factoryCodeHash key missing in manifest");
+        require(vm.keyExistsJson(json, ".bootstrapAdmin"), "HelperConfig: bootstrapAdmin key missing in manifest");
+        require(vm.keyExistsJson(json, ".name"), "HelperConfig: name key missing in manifest");
+        require(vm.keyExistsJson(json, ".symbol"), "HelperConfig: symbol key missing in manifest");
+        require(vm.keyExistsJson(json, ".constructorSupply"), "HelperConfig: constructorSupply key missing in manifest");
+        require(vm.keyExistsJson(json, ".maxSupply"), "HelperConfig: maxSupply key missing in manifest");
+        require(
+            vm.keyExistsJson(json, ".expectedTokenAddress"),
+            "HelperConfig: expectedTokenAddress key missing in manifest"
+        );
+
+        manifestConfig.salt = json.readBytes32(".salt");
+        manifestConfig.factory = json.readAddress(".factory");
+        manifestConfig.factoryCodeHash = json.readBytes32(".factoryCodeHash");
+        manifestConfig.bootstrapAdmin = json.readAddress(".bootstrapAdmin");
+        manifestConfig.name = json.readString(".name");
+        manifestConfig.symbol = json.readString(".symbol");
+        manifestConfig.constructorSupply = vm.parseUint(json.readString(".constructorSupply"));
+        manifestConfig.maxSupply = vm.parseUint(json.readString(".maxSupply"));
+        manifestConfig.expectedTokenAddress = json.readAddress(".expectedTokenAddress");
+
+        // Explicit validation checks for global values
+        require(manifestConfig.salt != bytes32(0), "HelperConfig: salt cannot be zero");
+        require(manifestConfig.factory != address(0), "HelperConfig: factory address cannot be zero");
+        require(manifestConfig.factoryCodeHash != bytes32(0), "HelperConfig: factoryCodeHash cannot be zero");
+        require(manifestConfig.bootstrapAdmin != address(0), "HelperConfig: bootstrapAdmin cannot be zero");
+        require(bytes(manifestConfig.name).length > 0, "HelperConfig: token name cannot be empty");
+        require(bytes(manifestConfig.symbol).length > 0, "HelperConfig: token symbol cannot be empty");
+        require(manifestConfig.maxSupply > 0, "HelperConfig: maxSupply must be greater than zero");
+
+        // Validate network configuration exists
+        string memory networkKey = string.concat(".networks.", vm.toString(block.chainid));
+        require(
+            vm.keyExistsJson(json, networkKey),
+            string.concat(
+                "HelperConfig: Chain ID ",
+                vm.toString(block.chainid),
+                " is not configured in networks section of manifest"
+            )
+        );
+
+        manifestConfig.rpcIdentifier = json.readString(string.concat(networkKey, ".rpcIdentifier"));
+        manifestConfig.targetAdmin = json.readAddress(string.concat(networkKey, ".targetAdmin"));
+        manifestConfig.initialMintRecipient = json.readAddress(string.concat(networkKey, ".initialMintRecipient"));
+        manifestConfig.expectedPostDeploymentSupply =
+            vm.parseUint(json.readString(string.concat(networkKey, ".expectedPostDeploymentSupply")));
+
+        // Explicit validation checks for network values
+        require(bytes(manifestConfig.rpcIdentifier).length > 0, "HelperConfig: rpcIdentifier cannot be empty");
+        require(manifestConfig.targetAdmin != address(0), "HelperConfig: targetAdmin cannot be zero");
+        if (manifestConfig.expectedPostDeploymentSupply > 0) {
+            require(
+                manifestConfig.initialMintRecipient != address(0),
+                "HelperConfig: initialMintRecipient cannot be zero when expectedPostDeploymentSupply > 0"
+            );
         }
+    }
 
-        // Validate zero addresses are not used
-        require(adminAddress != address(0), "HelperConfig: Admin address cannot be zero");
+    function getManifestConfig() public view returns (ManifestConfig memory) {
+        return manifestConfig;
+    }
 
-        activeNetworkConfig = NetworkConfig({
-            initialAdmin: adminAddress, initialSupply: initialSupply, maxSupply: MAX_SUPPLY, name: NAME, symbol: SYMBOL
-        });
+    /// @dev Test utility — returns the subset of manifest parameters that affect the CREATE2 address.
+    ///      Not used in the deployment flow itself.
+    function getDeterministicConstructorArgs()
+        public
+        view
+        returns (
+            string memory name,
+            string memory symbol,
+            address constructorAdmin,
+            uint256 constructorSupply,
+            uint256 maxSupply
+        )
+    {
+        name = manifestConfig.name;
+        symbol = manifestConfig.symbol;
+        constructorAdmin = manifestConfig.bootstrapAdmin;
+        constructorSupply = manifestConfig.constructorSupply;
+        maxSupply = manifestConfig.maxSupply;
     }
 }
