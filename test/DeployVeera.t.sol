@@ -1,0 +1,273 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {Test, console} from "forge-std/Test.sol";
+import {DeployVeera} from "../script/DeployVeera.s.sol";
+import {HelperConfig} from "../script/HelperConfig.s.sol";
+import {Veera} from "../src/Veera.sol";
+
+contract DeployVeeraTest is Test {
+    DeployVeera public deployer;
+
+    // NOTE: These addresses must match deploy_manifest.json.
+    // Update these if the manifest changes.
+    address public bootstrapAdmin = 0x3188aF25805b403006c49e9D387FB17bb65A9f25;
+    address public expectedFactory = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
+
+    function setUp() public {
+        deployer = new DeployVeera();
+
+        // Etch dummy contract bytecode to bypass extcodesize checks on admin addresses
+        vm.etch(0xd2b8875b840D3BD574E1e6b440888e110632A0FD, hex"00");
+        vm.etch(0xfEDB58C317d347e265990888919879a5d392a12c, hex"00");
+        vm.etch(0x9FF0FB8e246ac58b17Acf9b7D43B76E2D2e6Bf03, hex"00");
+
+        // Etch factory code to ensure codeSize > 0 check passes and Forge's broadcast parser recognizes it
+        vm.etch(
+            expectedFactory,
+            hex"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3"
+        );
+    }
+
+    // Helper to calculate predicted address from config on different chains
+    function getPredictedAddressForChain(uint256 chainId) public returns (address) {
+        vm.chainId(chainId);
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        bytes memory creationCode = abi.encodePacked(
+            type(Veera).creationCode,
+            abi.encode(
+                manifest.name, manifest.symbol, manifest.bootstrapAdmin, manifest.constructorSupply, manifest.maxSupply
+            )
+        );
+        bytes32 initCodeHash = keccak256(creationCode);
+        return computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
+    }
+
+    // 1. Base mainnet predicted address == BSC mainnet predicted address
+    function test_predictedAddressMatchesAcrossMainnets() public {
+        address basePredicted = getPredictedAddressForChain(8453);
+        address bscPredicted = getPredictedAddressForChain(56);
+
+        console.log("Base Mainnet Predicted Address: ", basePredicted);
+        console.log("BSC Mainnet Predicted Address:  ", bscPredicted);
+
+        assertEq(basePredicted, bscPredicted, "Predicted address should match across mainnets");
+    }
+
+    // 2. Base Sepolia predicted address == BSC testnet predicted address
+    function test_predictedAddressMatchesAcrossTestnets() public {
+        address baseSepoliaPredicted = getPredictedAddressForChain(84532);
+        address bscTestnetPredicted = getPredictedAddressForChain(97);
+
+        console.log("Base Sepolia Predicted Address: ", baseSepoliaPredicted);
+        console.log("BSC Testnet Predicted Address:  ", bscTestnetPredicted);
+
+        assertEq(baseSepoliaPredicted, bscTestnetPredicted, "Predicted address should match across testnets");
+    }
+
+    // 3. Predicted address matches expected token address
+    function test_predictedAddressMatchesManifest() public {
+        vm.chainId(8453);
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        // Skip check if manifest expectedAddress is still address(0) placeholder
+        if (manifest.expectedTokenAddress != address(0)) {
+            address predicted = getPredictedAddressForChain(8453);
+            assertEq(
+                predicted,
+                manifest.expectedTokenAddress,
+                "Predicted address does not match expectedTokenAddress in manifest"
+            );
+        }
+    }
+
+    // 4. Changing bootstrap admin changes predicted address
+    function test_changingBootstrapAdminChangesAddress() public {
+        address predictedWithAdmin = getPredictedAddressForChain(8453);
+
+        // Modify constructor arguments with different bootstrap admin
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        bytes memory creationCode = abi.encodePacked(
+            type(Veera).creationCode,
+            abi.encode(manifest.name, manifest.symbol, address(0xDEAD), manifest.constructorSupply, manifest.maxSupply)
+        );
+        bytes32 initCodeHash = keccak256(creationCode);
+        address predictedWithOtherAdmin = computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
+
+        assertTrue(predictedWithAdmin != predictedWithOtherAdmin, "Changing bootstrap admin must change address");
+    }
+
+    // 5. Changing constructor initial supply changes predicted address
+    function test_changingInitialSupplyChangesAddress() public {
+        address predictedWithZeroSupply = getPredictedAddressForChain(8453);
+
+        // Modify constructor arguments with non-zero initial supply
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        bytes memory creationCode = abi.encodePacked(
+            type(Veera).creationCode,
+            abi.encode(manifest.name, manifest.symbol, manifest.bootstrapAdmin, 1000 ether, manifest.maxSupply)
+        );
+        bytes32 initCodeHash = keccak256(creationCode);
+        address predictedWithNonZeroSupply = computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
+
+        assertTrue(predictedWithZeroSupply != predictedWithNonZeroSupply, "Changing initial supply must change address");
+    }
+
+    // 6. Changing salt changes predicted address
+    function test_changingSaltChangesAddress() public {
+        address predictedWithSalt = getPredictedAddressForChain(8453);
+
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        bytes memory creationCode = abi.encodePacked(
+            type(Veera).creationCode,
+            abi.encode(
+                manifest.name, manifest.symbol, manifest.bootstrapAdmin, manifest.constructorSupply, manifest.maxSupply
+            )
+        );
+        bytes32 initCodeHash = keccak256(creationCode);
+
+        bytes32 differentSalt = keccak256("DifferentSalt");
+        address predictedWithDifferentSalt = computeCreate2Address(differentSalt, initCodeHash, manifest.factory);
+
+        assertTrue(predictedWithSalt != predictedWithDifferentSalt, "Changing salt must change address");
+    }
+
+    // 7. Bootstrap admin has no roles after deployment
+    function test_bootstrapAdminHasNoRolesAfterDeployment() public {
+        vm.chainId(84532); // Base Sepolia
+
+        (Veera token,) = deployer.run();
+
+        assertFalse(token.hasRole(token.DEFAULT_ADMIN_ROLE(), bootstrapAdmin));
+        assertFalse(token.hasRole(token.MINTER_ROLE(), bootstrapAdmin));
+        assertFalse(token.hasRole(token.PAUSER_ROLE(), bootstrapAdmin));
+    }
+
+    // 8. Target admin receives DEFAULT_ADMIN_ROLE
+    function test_targetAdminReceivesDefaultAdminRole() public {
+        vm.chainId(84532); // Base Sepolia
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        (Veera token,) = deployer.run();
+
+        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), manifest.targetAdmin));
+    }
+
+    // 9. Pauser and Minter roles are initially unassigned post-deployment
+    function test_pauserAndMinterRolesAreInitiallyUnassigned() public {
+        vm.chainId(84532); // Base Sepolia
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        (Veera token,) = deployer.run();
+
+        // Neither targetAdmin nor bootstrapAdmin should have PAUSER_ROLE or MINTER_ROLE
+        assertFalse(token.hasRole(token.PAUSER_ROLE(), manifest.targetAdmin));
+        assertFalse(token.hasRole(token.MINTER_ROLE(), manifest.targetAdmin));
+        assertFalse(token.hasRole(token.PAUSER_ROLE(), bootstrapAdmin));
+        assertFalse(token.hasRole(token.MINTER_ROLE(), bootstrapAdmin));
+    }
+
+    // 10. Canonical chain receives initial mint
+    function test_canonicalChainReceivesInitialMint() public {
+        vm.chainId(8453); // Base Mainnet
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        (Veera token,) = deployer.run();
+
+        assertEq(token.totalSupply(), manifest.expectedPostDeploymentSupply);
+        assertEq(token.balanceOf(manifest.initialMintRecipient), manifest.expectedPostDeploymentSupply);
+    }
+
+    // 11. Remote chain starts with zero supply
+    function test_remoteChainStartsWithZeroSupply() public {
+        vm.chainId(56); // BSC Mainnet
+
+        (Veera token,) = deployer.run();
+
+        assertEq(token.totalSupply(), 0);
+    }
+
+    // 12. Deployed address matches predicted address on Base Mainnet
+    function test_deployedAddressMatchesPredicted_BaseMainnet() public {
+        vm.chainId(8453); // Base Mainnet
+        address predicted = getPredictedAddressForChain(8453);
+
+        (Veera token,) = deployer.run();
+
+        assertEq(address(token), predicted, "Deployed token address should match predicted address on Base Mainnet");
+    }
+
+    // 13. Deployed address matches predicted address on BSC Mainnet
+    function test_deployedAddressMatchesPredicted_BscMainnet() public {
+        vm.chainId(56); // BSC Mainnet
+        address predicted = getPredictedAddressForChain(56);
+
+        (Veera token,) = deployer.run();
+
+        assertEq(address(token), predicted, "Deployed token address should match predicted address on BSC Mainnet");
+    }
+
+    // 14. Deployed address matches expectedTokenAddress in manifest on Base Mainnet
+    function test_deployedAddressMatchesManifest_BaseMainnet() public {
+        vm.chainId(8453); // Base Mainnet
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        (Veera token,) = deployer.run();
+
+        assertEq(
+            address(token),
+            manifest.expectedTokenAddress,
+            "Deployed token address should match manifest on Base Mainnet"
+        );
+    }
+
+    // 15. Deployed address matches expectedTokenAddress in manifest on BSC Mainnet
+    function test_deployedAddressMatchesManifest_BscMainnet() public {
+        vm.chainId(56); // BSC Mainnet
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        (Veera token,) = deployer.run();
+
+        assertEq(
+            address(token), manifest.expectedTokenAddress, "Deployed token address should match manifest on BSC Mainnet"
+        );
+    }
+
+    // Utility: Run with `forge test --match-test test_logManifestIntegrityHash -vvv` to recompute
+    // the manifest integrity hash after a legitimate manifest change.
+    function test_logManifestIntegrityHash() public {
+        vm.chainId(8453);
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        bytes32 calculatedHash = keccak256(
+            abi.encode(
+                manifest.salt,
+                manifest.factory,
+                manifest.factoryCodeHash,
+                manifest.bootstrapAdmin,
+                keccak256(bytes(manifest.name)),
+                keccak256(bytes(manifest.symbol)),
+                manifest.constructorSupply,
+                manifest.maxSupply,
+                manifest.expectedTokenAddress
+            )
+        );
+        console.log("Manifest Integrity Hash:");
+        console.logBytes32(calculatedHash);
+    }
+}
