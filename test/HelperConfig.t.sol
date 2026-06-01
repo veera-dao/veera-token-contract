@@ -8,80 +8,69 @@ contract HelperConfigTest is Test {
     function test_BaseMainnetConfig() public {
         vm.chainId(8453);
         HelperConfig config = new HelperConfig();
-        (address initialAdmin, uint256 initialSupply, uint256 maxSupply, string memory name, string memory symbol) =
-            config.activeNetworkConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
 
-        assertEq(initialAdmin, 0xd2b8875b840D3BD574E1e6b440888e110632A0FD);
-        assertEq(initialSupply, 1_000_000_000 ether);
-        assertEq(maxSupply, 1_000_000_000 ether);
-        assertEq(name, "Veera Token");
-        assertEq(symbol, "VEERA");
+        assertEq(manifest.rpcIdentifier, "base_mainnet");
+        assertEq(manifest.targetAdmin, 0xd2b8875b840D3BD574E1e6b440888e110632A0FD);
+        assertEq(manifest.initialMintRecipient, 0xd2b8875b840D3BD574E1e6b440888e110632A0FD);
+        assertEq(manifest.expectedPostDeploymentSupply, 1_000_000_000 ether);
     }
 
     function test_BaseSepoliaConfig() public {
         vm.chainId(84532);
         HelperConfig config = new HelperConfig();
-        (address initialAdmin, uint256 initialSupply, uint256 maxSupply, string memory name, string memory symbol) =
-            config.activeNetworkConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
 
-        assertEq(initialAdmin, 0xfEDB58C317d347e265990888919879a5d392a12c);
-        assertEq(initialSupply, 1_000_000_000 ether);
-        assertEq(maxSupply, 1_000_000_000 ether);
-        assertEq(name, "Veera Token");
-        assertEq(symbol, "VEERA");
+        assertEq(manifest.rpcIdentifier, "base_testnet");
+        assertEq(manifest.targetAdmin, 0xfEDB58C317d347e265990888919879a5d392a12c);
+        assertEq(manifest.initialMintRecipient, 0xfEDB58C317d347e265990888919879a5d392a12c);
+        assertEq(manifest.expectedPostDeploymentSupply, 1_000_000_000 ether);
     }
 
     function test_BSCMainnetConfig() public {
         vm.chainId(56);
         HelperConfig config = new HelperConfig();
-        (address initialAdmin, uint256 initialSupply, uint256 maxSupply, string memory name, string memory symbol) =
-            config.activeNetworkConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
 
-        assertEq(initialAdmin, 0xd2b8875b840D3BD574E1e6b440888e110632A0FD);
-        assertEq(initialSupply, 0 ether);
-        assertEq(maxSupply, 1_000_000_000 ether);
-        assertEq(name, "Veera Token");
-        assertEq(symbol, "VEERA");
+        assertEq(manifest.rpcIdentifier, "bsc_mainnet");
+        assertEq(manifest.targetAdmin, 0xd2b8875b840D3BD574E1e6b440888e110632A0FD);
+        assertEq(manifest.initialMintRecipient, address(0));
+        assertEq(manifest.expectedPostDeploymentSupply, 0 ether);
     }
 
     function test_BSCTestnetConfig() public {
         vm.chainId(97);
         HelperConfig config = new HelperConfig();
-        (address initialAdmin, uint256 initialSupply, uint256 maxSupply, string memory name, string memory symbol) =
-            config.activeNetworkConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
 
-        assertEq(initialAdmin, 0x9FF0FB8e246ac58b17Acf9b7D43B76E2D2e6Bf03);
-        assertEq(initialSupply, 0 ether);
-        assertEq(maxSupply, 1_000_000_000 ether);
-        assertEq(name, "Veera Token");
-        assertEq(symbol, "VEERA");
+        assertEq(manifest.rpcIdentifier, "bsc_testnet");
+        assertEq(manifest.targetAdmin, 0x9FF0FB8e246ac58b17Acf9b7D43B76E2D2e6Bf03);
+        assertEq(manifest.initialMintRecipient, address(0));
+        assertEq(manifest.expectedPostDeploymentSupply, 0 ether);
     }
 
     function test_LocalConfigFallback() public {
         vm.chainId(LOCAL_CHAINID);
         HelperConfig config = new HelperConfig();
-        (address initialAdmin, uint256 initialSupply, uint256 maxSupply, string memory name, string memory symbol) =
-            config.activeNetworkConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
 
-        assertEq(initialAdmin, 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
-        assertEq(initialSupply, 1_000_000_000 ether);
-        assertEq(maxSupply, 1_000_000_000 ether);
-        assertEq(name, "Veera Token");
-        assertEq(symbol, "VEERA");
+        assertEq(manifest.rpcIdentifier, "local_anvil");
+        assertEq(manifest.targetAdmin, 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
+        assertEq(manifest.initialMintRecipient, 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
+        assertEq(manifest.expectedPostDeploymentSupply, 1_000_000_000 ether);
     }
 
-    function test_DeterministicConstructorArgs_MainnetsMatch() public {
+    function test_constructorArgsAreIdenticalAcrossMainnets() public {
         // Retrieve Base Mainnet deterministic args
         vm.chainId(8453);
         HelperConfig baseConfig = new HelperConfig();
-        address mockDeployer = address(0x123);
         (
             string memory baseName,
             string memory baseSymbol,
             address baseConstructorAdmin,
             uint256 baseConstructorSupply,
             uint256 baseMaxSupply
-        ) = baseConfig.getDeterministicConstructorArgs(mockDeployer);
+        ) = baseConfig.getDeterministicConstructorArgs();
 
         // Retrieve BSC Mainnet deterministic args
         vm.chainId(56);
@@ -92,7 +81,7 @@ contract HelperConfigTest is Test {
             address bscConstructorAdmin,
             uint256 bscConstructorSupply,
             uint256 bscMaxSupply
-        ) = bscConfig.getDeterministicConstructorArgs(mockDeployer);
+        ) = bscConfig.getDeterministicConstructorArgs();
 
         // Assert they are identical
         assertEq(baseName, bscName);
@@ -104,22 +93,21 @@ contract HelperConfigTest is Test {
         // Assert supply is 0
         assertEq(baseConstructorSupply, 0);
 
-        // Assert they match the expected mainnet values
-        assertEq(baseConstructorAdmin, mockDeployer);
+        // Assert bootstrap admin is correct EOA
+        assertEq(baseConstructorAdmin, 0x3188aF25805b403006c49e9D387FB17bb65A9f25);
     }
 
-    function test_DeterministicConstructorArgs_TestnetsMatch() public {
+    function test_constructorArgsAreIdenticalAcrossTestnets() public {
         // Retrieve Base Sepolia deterministic args
         vm.chainId(84532);
         HelperConfig baseConfig = new HelperConfig();
-        address mockDeployer = address(0x123);
         (
             string memory baseName,
             string memory baseSymbol,
             address baseConstructorAdmin,
             uint256 baseConstructorSupply,
             uint256 baseMaxSupply
-        ) = baseConfig.getDeterministicConstructorArgs(mockDeployer);
+        ) = baseConfig.getDeterministicConstructorArgs();
 
         // Retrieve BSC Testnet deterministic args
         vm.chainId(97);
@@ -130,7 +118,7 @@ contract HelperConfigTest is Test {
             address bscConstructorAdmin,
             uint256 bscConstructorSupply,
             uint256 bscMaxSupply
-        ) = bscConfig.getDeterministicConstructorArgs(mockDeployer);
+        ) = bscConfig.getDeterministicConstructorArgs();
 
         // Assert they are identical
         assertEq(baseName, bscName);
@@ -142,7 +130,7 @@ contract HelperConfigTest is Test {
         // Assert supply is 0
         assertEq(baseConstructorSupply, 0);
 
-        // Assert they match the expected testnet values (unified testnet admin)
-        assertEq(baseConstructorAdmin, mockDeployer);
+        // Assert bootstrap admin is correct EOA
+        assertEq(baseConstructorAdmin, 0x3188aF25805b403006c49e9D387FB17bb65A9f25);
     }
 }
