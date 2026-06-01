@@ -60,4 +60,22 @@ contract HelperConfig is Script {
             initialAdmin: adminAddress, initialSupply: initialSupply, maxSupply: MAX_SUPPLY, name: NAME, symbol: SYMBOL
         });
     }
+
+    function getDeterministicConstructorArgs(address deployer)
+        public
+        pure
+        returns (
+            string memory name,
+            string memory symbol,
+            address constructorAdmin,
+            uint256 constructorSupply,
+            uint256 maxSupply
+        )
+    {
+        name = NAME;
+        symbol = SYMBOL;
+        maxSupply = MAX_SUPPLY;
+        constructorSupply = 0; // Must be 0 for deterministic cross-chain deployment
+        constructorAdmin = deployer;
+    }
 }
