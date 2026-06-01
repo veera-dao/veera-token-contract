@@ -10,22 +10,39 @@ contract DeployVeera is Script {
         HelperConfig config = new HelperConfig();
         HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
 
-        // 1. Validate broadcaster EOA (tx.origin is verified at runtime)
-        if (msg.sender.code.length == 0) {
-            require(tx.origin == manifest.bootstrapAdmin, "Broadcaster must be the bootstrap admin EOA");
+        // 1. Determine deployer address (defaulting to manifest.bootstrapAdmin if env is not set)
+        bool isTest = msg.sender.code.length > 0;
+        address deployerAddress;
+        if (isTest) {
+            deployerAddress = manifest.bootstrapAdmin;
+        } else {
+            deployerAddress = vm.envOr("DEPLOYER_ADDRESS", manifest.bootstrapAdmin);
+            require(deployerAddress == manifest.bootstrapAdmin, "Wrong deployer address in environment");
         }
 
-        // 2. Validate CREATE2 deployer/factory address
-        // The default factory address used by Forge for deterministic deployments
+        // 2. Validate CREATE2 deployer/factory address and codehash
         address expectedFactory = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
         require(manifest.factory == expectedFactory, "Unsupported CREATE2 factory address");
 
         uint256 codeSize;
+        bytes32 codeHash;
         address fact = manifest.factory;
         assembly {
             codeSize := extcodesize(fact)
+            codeHash := extcodehash(fact)
         }
         require(codeSize > 0, "CREATE2 factory not deployed on target chain");
+        require(codeHash == manifest.factoryCodeHash, "Unexpected CREATE2 factory bytecode");
+
+        // Validate targetAdmin contract (Gnosis Safe) exists on live networks
+        if (block.chainid != 31337) {
+            uint256 adminCodeSize;
+            address targetAdminAddress = manifest.targetAdmin;
+            assembly {
+                adminCodeSize := extcodesize(targetAdminAddress)
+            }
+            require(adminCodeSize > 0, "Target admin must be a deployed contract/multisig");
+        }
 
         // 3. Compute and validate predicted CREATE2 address
         bytes memory creationCode = abi.encodePacked(
@@ -42,19 +59,41 @@ contract DeployVeera is Script {
         console.log("Expected address:  ", manifest.expectedTokenAddress);
         console.log("--------------------------------------------------");
 
-        if (manifest.expectedTokenAddress == address(0)) {
-            console.log("WARNING: expectedTokenAddress is zero. Bootstrapping mode active.");
+        if (block.chainid == 31337 && manifest.expectedTokenAddress == address(0)) {
+            console.log("WARNING: expectedTokenAddress is zero. Bootstrapping mode active on local anvil.");
         } else {
-            require(predicted == manifest.expectedTokenAddress, "Predicted address does not match expectedTokenAddress");
+            require(manifest.expectedTokenAddress != address(0), "expectedTokenAddress must be set on public chains");
+            require(predicted == manifest.expectedTokenAddress, "Predicted address mismatch");
         }
 
-        // Start broadcast explicitly using the bootstrapAdmin EOA
-        vm.startBroadcast(manifest.bootstrapAdmin);
+        // Pre-deploy check: verify that the token has not been deployed already
+        uint256 predictedCodeSize;
+        assembly {
+            predictedCodeSize := extcodesize(predicted)
+        }
+        require(predictedCodeSize == 0, "Contract already deployed at predicted address");
 
-        // 4. Deploy using CREATE2 for deterministic addressing
-        Veera token = new Veera{salt: manifest.salt}(
-            manifest.name, manifest.symbol, manifest.bootstrapAdmin, manifest.constructorSupply, manifest.maxSupply
-        );
+        // Start broadcast using the determined deployer signer path
+        if (isTest) {
+            vm.startPrank(deployerAddress);
+        } else {
+            uint256 privateKey = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
+            if (privateKey != 0) {
+                address derived = vm.addr(privateKey);
+                require(derived == manifest.bootstrapAdmin, "Private key does not match bootstrapAdmin EOA");
+                vm.startBroadcast(privateKey);
+            } else {
+                vm.startBroadcast(deployerAddress);
+            }
+        }
+
+        // 4. Deploy using CREATE2 for deterministic addressing via the factory
+        bytes memory deployData = abi.encodePacked(manifest.salt, creationCode);
+        (bool success, bytes memory returnedData) = manifest.factory.call(deployData);
+        require(success, "Failed to deploy via CREATE2 factory");
+        address deployedAddress = abi.decode(abi.encodePacked(bytes12(0), returnedData), (address));
+        require(deployedAddress == predicted, "Deployed address mismatch");
+        Veera token = Veera(deployedAddress);
 
         // 5. Mint initial supply post-deployment only on home chain (when expectedPostDeploymentSupply > 0)
         if (manifest.expectedPostDeploymentSupply > 0) {
@@ -72,7 +111,11 @@ contract DeployVeera is Script {
         token.revokeRole(token.PAUSER_ROLE(), manifest.bootstrapAdmin);
         token.revokeRole(token.DEFAULT_ADMIN_ROLE(), manifest.bootstrapAdmin);
 
-        vm.stopBroadcast();
+        if (isTest) {
+            vm.stopPrank();
+        } else {
+            vm.stopBroadcast();
+        }
 
         // 7. Make role and supply handoff fail-closed
         console.log("Verifying final deployment state...");

@@ -197,4 +197,52 @@ contract DeployVeeraTest is Test {
 
         assertEq(token.totalSupply(), 0);
     }
+
+    // 12. Deployed address matches predicted address on Base Mainnet
+    function test_deployedAddressMatchesPredicted_BaseMainnet() public {
+        vm.chainId(8453); // Base Mainnet
+        address predicted = getPredictedAddressForChain(8453);
+
+        (Veera token,) = deployer.run();
+
+        assertEq(address(token), predicted, "Deployed token address should match predicted address on Base Mainnet");
+    }
+
+    // 13. Deployed address matches predicted address on BSC Mainnet
+    function test_deployedAddressMatchesPredicted_BscMainnet() public {
+        vm.chainId(56); // BSC Mainnet
+        address predicted = getPredictedAddressForChain(56);
+
+        (Veera token,) = deployer.run();
+
+        assertEq(address(token), predicted, "Deployed token address should match predicted address on BSC Mainnet");
+    }
+
+    // 14. Deployed address matches expectedTokenAddress in manifest on Base Mainnet
+    function test_deployedAddressMatchesManifest_BaseMainnet() public {
+        vm.chainId(8453); // Base Mainnet
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        (Veera token,) = deployer.run();
+
+        assertEq(
+            address(token),
+            manifest.expectedTokenAddress,
+            "Deployed token address should match manifest on Base Mainnet"
+        );
+    }
+
+    // 15. Deployed address matches expectedTokenAddress in manifest on BSC Mainnet
+    function test_deployedAddressMatchesManifest_BscMainnet() public {
+        vm.chainId(56); // BSC Mainnet
+        HelperConfig config = new HelperConfig();
+        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+
+        (Veera token,) = deployer.run();
+
+        assertEq(
+            address(token), manifest.expectedTokenAddress, "Deployed token address should match manifest on BSC Mainnet"
+        );
+    }
 }

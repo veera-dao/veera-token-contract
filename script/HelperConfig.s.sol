@@ -16,6 +16,7 @@ contract HelperConfig is Script {
         // Global deterministic parameters (affecting CREATE2 address)
         bytes32 salt;
         address factory;
+        bytes32 factoryCodeHash;
         address bootstrapAdmin;
         string name;
         string symbol;
@@ -39,6 +40,7 @@ contract HelperConfig is Script {
 
         manifestConfig.salt = json.readBytes32(".salt");
         manifestConfig.factory = json.readAddress(".factory");
+        manifestConfig.factoryCodeHash = json.readBytes32(".factoryCodeHash");
         manifestConfig.bootstrapAdmin = json.readAddress(".bootstrapAdmin");
         manifestConfig.name = json.readString(".name");
         manifestConfig.symbol = json.readString(".symbol");
