@@ -106,17 +106,44 @@ Before broadcasting, ensure the following are configured in `deploy_manifest.jso
 
 ---
 
-## 5. Operational Run Commands
+## 5. Deployment Management & Security Lifecycle
+
+### Manifest File Maintenance
+The JSON configuration file `deploy_manifest.json` acts as the single source of truth for the deployment. Proposing modifications to any global parameters (like `salt` or `bootstrapAdmin`) or changing network configurations must be done with caution.
+To guarantee manifest integrity and prevent unauthorized changes, the codebase implements two verification steps:
+1. **Solidity Code Integrity Hash:** The script `DeployVeera.s.sol` calculates the `keccak256` hash of the parsed global deterministic parameters and asserts that it matches `EXPECTED_MANIFEST_INTEGRITY_HASH`. Proposing a manifest change will require updating this code hash in `DeployVeera.s.sol`.
+2. **SHA-256 Checksum Validation:** The utility script `scripts/verify-manifest-checksum.sh` computes the SHA-256 hash of `deploy_manifest.json` and compares it against the approved checksum (`605b340f85590a56793828beacc9fc4525d3fa43d2ca61d8c71781d5800a4bbd`).
+
+### Predicted Addresses Per Chain
+With optimization enabled (Solidity 0.8.24, Cancun, 200 runs) and the standard Arachnid CREATE2 factory, the predicted token address is:
+* **All Networks (Base & BSC Mainnet/Testnet):** `0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532`
+* **Local Anvil (Chain ID 31337):** Matches the above address if the default parameters are used, but can be set to `address(0)` in the manifest for local development/testing.
+
+### Bootstrap Process & Security Assumptions
+1. **Signer Ownership:** The Bootstrap Admin EOA (`0x3188aF25805b403006c49e9D387FB17bb65A9f25`) acts as a temporary bootstrap owner. It must sign the deployment script.
+2. **Zero-Trust Transfer:** In the same deployment flow, all initial roles are transferred to the Gnosis Safe multisig `targetAdmin` contract, and the Bootstrap Admin renounces all its roles. Post-deployment, the Bootstrap Admin holds zero roles or privileges.
+3. **Pausable and Minter Invariance:** `PAUSER_ROLE` and `MINTER_ROLE` are intentionally left unassigned post-deployment. The Gnosis Safe `targetAdmin` is the only entity that can grant these roles subsequently.
+
+### Post-Deployment Verification Steps
+After running the script, verify the deployed contract state:
+1. **Run Checksum Verification:** Use `./scripts/verify-manifest-checksum.sh` to ensure the manifest was not modified during the deployment.
+2. **Run Post-Deployment Script:** Execute `scripts/verify-deployment.sh` against the deployed token address:
+   ```bash
+   ./scripts/verify-deployment.sh 0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532 <EXPECTED_TARGET_ADMIN_ADDRESS>
+   ```
+   This script performs on-chain queries to verify the metadata, supply, role setup, and checks that the bootstrap EOA has no roles left.
+
+---
+
+## 6. Operational Run Commands
 
 ### 1. Dry Run (Local Simulation)
-
-Simulate the deployment locally on an Anvil fork or local node:
-
+Simulate the deployment locally on an Anvil fork or local node. You can also specify the `DRY_RUN=true` environment variable to simulate address prediction and parsing logic without triggering any transaction broadcast:
 ```bash
 # Start anvil locally
 anvil
 
-# Run script simulation (will print predicted and expected addresses)
+# Run script simulation
 forge script script/DeployVeera.s.sol \
   --rpc-url http://localhost:8545 \
   --sender 0x3188aF25805b403006c49e9D387FB17bb65A9f25 \
@@ -124,16 +151,12 @@ forge script script/DeployVeera.s.sol \
 ```
 
 ### 2. Mainnet / Testnet Deployment
-
 To perform the live deployment on a network (e.g. Base Sepolia), configure your environment variables in `.env`:
-
 ```bash
 DEPLOYER_ADDRESS=0x3188aF25805b403006c49e9D387FB17bb65A9f25
 DEPLOYER_PRIVATE_KEY=0x... # (Or leave unset if signing interactively / using ledger)
 ```
-
 Run the following command using the private key / hardware wallet of the Bootstrap Admin:
-
 ```bash
 forge script script/DeployVeera.s.sol \
   --rpc-url <YOUR_RPC_URL> \
@@ -145,17 +168,19 @@ forge script script/DeployVeera.s.sol \
 
 ---
 
-## 6. Security, targetAdmin Validation, & Recovery
+## 7. Security, targetAdmin Validation, & Recovery
 
 ### Gnosis Safe validation
 To prevent operational errors, the script validates that the `targetAdmin` is a **contract address** (i.e., Gnosis Safe or multisig vault) by performing an `extcodesize` check on live networks (bypassed on local anvil chain `31337`). If no code is deployed at `targetAdmin` on the target chain, the transaction will revert before broadcasting.
 
-### Fail-Closed Assertions
-The script executes post-deployment checks that will **revert the entire transaction** if any state violates the security criteria:
-* If the total supply on a remote chain (like BSC) is non-zero, it reverts.
-* If the bootstrap EOA retains `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE`, or `PAUSER_ROLE`, it reverts.
-* If the target admin does not have `DEFAULT_ADMIN_ROLE` assigned, it reverts.
-* If the target admin (or any other address other than what's expected) has `PAUSER_ROLE` or `MINTER_ROLE` assigned post-deployment, it reverts.
+### Fail-Closed Assertions & Verification
+Because the script performs multiple separate broadcasted calls (deployment, minting, role setups), a failure in the final verification step does not automatically roll back prior completed transactions on-chain. However, the script executes post-deployment checks at the end of its run to ensure the final state strictly matches all security criteria:
+* If the total supply on a remote chain (like BSC) is non-zero, the script fails.
+* If the bootstrap EOA retains `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE`, or `PAUSER_ROLE`, the script fails.
+* If the target admin does not have `DEFAULT_ADMIN_ROLE` assigned, the script fails.
+* If the target admin (or any other address other than what's expected) has `PAUSER_ROLE` or `MINTER_ROLE` assigned post-deployment, the script fails.
+
+The practical guarantee is that if any check fails, the script fails verification and prevents a successful deployment run from being accepted or recorded as valid.
 
 ### Interrupted Deployment Recovery
 If a transaction fails or reverts midway, or if the factory is missing on a specific network, follow these recovery steps:
@@ -166,7 +191,7 @@ If a transaction fails or reverts midway, or if the factory is missing on a spec
 
 ---
 
-## 7. Gas Considerations
+## 8. Gas Considerations
 
 The Veera token contract uses multiple OpenZeppelin extensions, which affects gas costs. Approximate gas costs for common operations:
 
@@ -181,7 +206,7 @@ The Veera token contract uses multiple OpenZeppelin extensions, which affects ga
 
 ---
 
-## 8. Contract Size Monitoring
+## 9. Contract Size Monitoring
 
 Ethereum has a 24KB (24,576 bytes) contract size limit for runtime bytecode. Monitor the compiled contract size using:
 
@@ -191,7 +216,7 @@ forge build --sizes
 
 ---
 
-## 9. Integration Testing
+## 10. Integration Testing
 
 After deploying the contract, you can run comprehensive integration tests to verify all functionality on the deployed instance.
 
