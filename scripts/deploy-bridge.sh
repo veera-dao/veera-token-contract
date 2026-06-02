@@ -49,8 +49,6 @@ elif [[ "$*" == *"--ledger"* ]] || [[ "$*" == *"--trezor"* ]]; then
   fi
 elif [ -n "${DEPLOYER_PRIVATE_KEY:-}" ]; then
   SIGNER_FLAGS="--private-key ${DEPLOYER_PRIVATE_KEY}"
-elif [ -n "${PRIVATE_KEY:-}" ]; then
-  SIGNER_FLAGS="--private-key ${PRIVATE_KEY}"
 elif [ -n "${HARDWARE:-}" ]; then
   SIGNER_FLAGS="${HARDWARE}"
   if [ -n "${DEPLOYER_ADDRESS:-}" ]; then
