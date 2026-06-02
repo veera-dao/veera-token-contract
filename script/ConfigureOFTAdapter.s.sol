@@ -27,9 +27,21 @@ contract ConfigureOFTAdapter is Script {
 
         bytes32 peerBytes32 = addressToBytes32(peerAddress);
 
+        VeeraMintBurnOFTAdapter adapter = VeeraMintBurnOFTAdapter(adapterAddress);
+
+        // Pre-broadcast checks
+        address expectedOwner = vm.envOr("OWNER_ADDRESS", vm.envOr("DEPLOYER_ADDRESS", address(0)));
+        if (expectedOwner != address(0)) {
+            require(adapter.owner() == expectedOwner, "ConfigureOFTAdapter: Signer/owner mismatch");
+        }
+
+        bool overwritePeer = vm.envOr("OVERWRITE_PEER", false);
+        if (!overwritePeer) {
+            require(adapter.peers(peerEid) == bytes32(0), "ConfigureOFTAdapter: Peer already set");
+        }
+
         vm.startBroadcast();
 
-        VeeraMintBurnOFTAdapter adapter = VeeraMintBurnOFTAdapter(adapterAddress);
         adapter.setPeer(peerEid, peerBytes32);
 
         vm.stopBroadcast();

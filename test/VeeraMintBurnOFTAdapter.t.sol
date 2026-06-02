@@ -307,6 +307,24 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
         assertEq(randomToken.balanceOf(recipient), 100e18);
     }
 
+    function test_RescueUnderlyingVeera_DirectTransferOnly() public {
+        // Mint some tokens to this contract and transfer to adapter (simulating direct transfer by user error)
+        uint256 amountToRescue = 100e18;
+        tokenA.mint(address(this), amountToRescue);
+        tokenA.transfer(address(adapterA), amountToRescue);
+
+        assertEq(tokenA.balanceOf(address(adapterA)), amountToRescue);
+
+        address recipient = makeAddr("rescueRecipient");
+
+        // Rescue the underlying Veera tokens as owner
+        adapterA.rescueERC20(address(tokenA), recipient, amountToRescue);
+
+        // Verify balances
+        assertEq(tokenA.balanceOf(address(adapterA)), 0);
+        assertEq(tokenA.balanceOf(recipient), amountToRescue);
+    }
+
     function test_RescueERC20_RevertsIf_NonOwner() public {
         Veera randomToken = new Veera("Random Token", "RAND", address(this), 1000e18, 1000e18);
         assertTrue(randomToken.transfer(address(adapterA), 100e18));

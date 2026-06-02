@@ -5,6 +5,20 @@ import {Script, console} from "forge-std/Script.sol";
 import {VeeraMintBurnOFTAdapter} from "../src/bridge/VeeraMintBurnOFTAdapter.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 
+/**
+ * @title DeployOFTAdapter
+ * @notice Script to deploy the VeeraMintBurnOFTAdapter contract using CREATE2.
+ *
+ * @dev Separate Lifecycle Phases:
+ * 1. Deployment: Deploying the contract using this script.
+ * 2. Configuration: Setting peers (e.g. via ConfigureOFTAdapter.s.sol).
+ * 3. Activation: Token Admin/Safe granting MINTER_ROLE to the adapter on the token contract.
+ * These are separate operational phases handled by distinct tasks/transactions.
+ *
+ * @dev Deterministic Address Invariant:
+ * The bridge adapter address will only match across chains when token address, LayerZero endpoint,
+ * targetAdmin, salt, factory, bytecode, and compiler settings all match.
+ */
 contract DeployOFTAdapter is Script {
     function run() external returns (VeeraMintBurnOFTAdapter, HelperConfig) {
         HelperConfig config = new HelperConfig();

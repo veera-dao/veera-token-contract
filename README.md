@@ -43,6 +43,13 @@ The cross-chain bridging is powered by LayerZero V2 using a custom [VeeraMintBur
 * **Access Control**: The adapter **must** receive `MINTER_ROLE` (and only this adapter) on the local [Veera](src/Veera.sol) token contract to allow it to mint tokens on credit (bridge in) without any other entity having mint authority.
 * **User Approval**: Users **must approve** this adapter address on the `Veera` token contract before calling the LayerZero `send` function.
 * **Peer Configuration**: It is recommended to use LayerZero's official `lz` CLI or Hardhat/devtools configuration tasks for peer wiring.
+* **Operational Phases**:
+  1. **Deployment**: Deploying the bridge adapter contract using `DeployOFTAdapter.s.sol`.
+  2. **Configuration**: Wire the peers by calling `setPeer` on the adapter (using `ConfigureOFTAdapter.s.sol`).
+  3. **Activation**: Granting `MINTER_ROLE` to the adapter address on the token contract (via Gnosis Safe).
+  *Note: These are strictly separate lifecycle phases handled by distinct tasks/transactions.*
+* **Deterministic Bridge Address Invariant**:
+  The bridge adapter address will only match across chains when token address, LayerZero endpoint, targetAdmin, salt, factory, bytecode, and compiler settings all match. Since LayerZero endpoints are network-specific, predicted bridge adapter addresses will typically differ across mainnets and testnets depending on these variables.
 * **Limitations & Safety Guidelines**:
   * **Single Adapter per Chain**: Only one `OFTAdapter` should be deployed per chain for this token. Multiple adapters break unified liquidity and can lead to permanent token loss on destination chains.
   * **Fee-on-Transfer**: Fee-on-transfer / rebasing tokens are **not supported** by this adapter.
