@@ -2,8 +2,13 @@
 pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
+import {Veera} from "../src/Veera.sol";
 import {VeeraMintBurnOFTAdapter} from "../src/bridge/VeeraMintBurnOFTAdapter.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
+
+interface ILzEndpointV2 {
+    function delegates(address oapp) external view returns (address);
+}
 
 /**
  * @title DeployOFTAdapter
@@ -53,6 +58,20 @@ contract DeployOFTAdapter is Script {
                 tokenCodeSize := extcodesize(tokenAddress)
             }
             require(tokenCodeSize > 0, "Veera token contract must be deployed before adapter");
+
+            // Query and validate token name and symbol
+            string memory tokenName = Veera(tokenAddress).name();
+            string memory tokenSymbol = Veera(tokenAddress).symbol();
+            require(keccak256(bytes(tokenName)) == keccak256(bytes(manifest.name)), "Token name mismatch");
+            require(keccak256(bytes(tokenSymbol)) == keccak256(bytes(manifest.symbol)), "Token symbol mismatch");
+
+            // Validate targetAdmin contract (Gnosis Safe) exists on live networks
+            uint256 adminCodeSize;
+            address targetAdminAddress = manifest.targetAdmin;
+            assembly {
+                adminCodeSize := extcodesize(targetAdminAddress)
+            }
+            require(adminCodeSize > 0, "Target admin must be a deployed contract/multisig");
         }
 
         // Validate lzEndpoint exists on live networks
@@ -155,6 +174,12 @@ contract DeployOFTAdapter is Script {
         console.log("Verifying final bridge deployment state...");
         require(address(adapter.token()) == manifest.expectedTokenAddress, "Fail-closed: Token address mismatch");
         require(adapter.owner() == manifest.targetAdmin, "Fail-closed: Owner/Delegate address mismatch");
+        require(adapter.sharedDecimals() == 6, "Fail-closed: Unexpected shared decimals");
+
+        if (manifest.lzEndpoint != address(0)) {
+            address delegate = ILzEndpointV2(manifest.lzEndpoint).delegates(address(adapter));
+            require(delegate == manifest.targetAdmin, "Fail-closed: Endpoint delegate mismatch");
+        }
 
         console.log("--------------------------------------------------");
         console.log("OFT ADAPTER DEPLOYMENT COMPLETE & VERIFIED");
