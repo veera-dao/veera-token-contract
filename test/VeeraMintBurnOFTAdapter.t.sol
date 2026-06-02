@@ -311,7 +311,7 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
         // Mint some tokens to this contract and transfer to adapter (simulating direct transfer by user error)
         uint256 amountToRescue = 100e18;
         tokenA.mint(address(this), amountToRescue);
-        tokenA.transfer(address(adapterA), amountToRescue);
+        assertTrue(tokenA.transfer(address(adapterA), amountToRescue));
 
         assertEq(tokenA.balanceOf(address(adapterA)), amountToRescue);
 
