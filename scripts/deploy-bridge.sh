@@ -5,7 +5,7 @@
 #
 # Usage:
 #   ./scripts/deploy-bridge.sh                         # Deploy with config from .env
-#   RPC_URL=<url> ./scripts/deploy-bridge.sh           # Override RPC
+#   ./scripts/deploy-bridge.sh <url>                   # Override RPC
 #   DRY_RUN=true ./scripts/deploy-bridge.sh            # Dry run / simulation
 #   ./scripts/deploy-bridge.sh --keystore <path>       # Use a keystore
 #   ./scripts/deploy-bridge.sh --private-key <key>     # Use a private key
@@ -24,9 +24,9 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-RPC_URL="${RPC_URL:-${BASE_RPC_URL:-}}"
+RPC_URL="${$1}"
 if [ -z "$RPC_URL" ]; then
-    echo "❌ Error: RPC_URL (or BASE_RPC_URL) is not set in .env or as environment variable."
+    echo "❌ Error: RPC_URL is required"
     exit 1
 fi
 

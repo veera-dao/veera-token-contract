@@ -70,10 +70,20 @@ echo -e "${NC}"
 read_manifest_val() {
   node -e "
     const fs = require('fs');
-    const data = JSON.parse(fs.readFileSync('${REPO_ROOT}/deploy_manifest.json', 'utf8'));
-    const path = '$1'.split('.');
+    const path = require('path');
+    const envPath = process.env.DEPLOY_MANIFEST_PATH;
+    const manifestFile = envPath || 'deploy_manifest.testnet.json';
+    const manifestPath = path.isAbsolute(manifestFile)
+      ? manifestFile
+      : path.resolve('${REPO_ROOT}', manifestFile);
+    if (!fs.existsSync(manifestPath)) {
+      console.error('Error: deploy manifest not found at ' + manifestPath);
+      process.exit(1);
+    }
+    const data = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const keyPath = '$1'.split('.');
     let val = data;
-    for (const key of path) {
+    for (const key of keyPath) {
       if (key === '') continue;
       val = val[key];
     }
@@ -255,6 +265,40 @@ for i in "${!CHAINS[@]}"; do
     fi
     
 done
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 10. Verify on-chain DVN/ULN configuration matches intended config
+# ──────────────────────────────────────────────────────────────────────────────
+echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${CYAN}${BOLD}🔍 Verifying LayerZero Pathway Configuration (DVN/ULN)${NC}"
+
+LZ_CONFIG_FILE="layerzero.config.ts"
+
+# Run hardhat lz:oapp:config:get and check for configuration drift
+CONFIG_OUTPUT=$(cd "$REPO_ROOT" && npx hardhat lz:oapp:config:get \
+    --oapp-config "$LZ_CONFIG_FILE" 2>&1) || true
+
+if echo "$CONFIG_OUTPUT" | grep -qi "error\|fail\|cannot"; then
+    echo -e "   ${RED}${BOLD}✗ Failed to query on-chain LayerZero config:${NC}"
+    echo "$CONFIG_OUTPUT" | head -20
+    ALL_SYSTEMS_PASSED=false
+else
+    echo -e "   ${GREEN}✓${NC} On-chain LayerZero pathway configuration queried successfully"
+    # Output summary for manual inspection
+    echo -e "   ${CYAN}📋 Configuration output (review for correctness):${NC}"
+    echo "$CONFIG_OUTPUT" | head -40
+fi
+
+# 11. Display expected DVN addresses (mainnet only)
+if [ "$ENV" == "mainnet" ]; then
+    EXPECTED_LZ_DVN="0x9e059a54699a285714207b43B055483E78FAac25"
+    EXPECTED_GOOGLE_DVN="0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc"
+    echo ""
+    echo -e "   ${CYAN}🛡️  Expected Mainnet DVNs:${NC}"
+    echo -e "      LayerZero Labs: ${MAGENTA}$EXPECTED_LZ_DVN${NC}"
+    echo -e "      Google:         ${MAGENTA}$EXPECTED_GOOGLE_DVN${NC}"
+    echo -e "   ${YELLOW}⚠️  Manually verify the above DVN addresses appear in the on-chain config output.${NC}"
+fi
 
 echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 if [ "$ALL_SYSTEMS_PASSED" == "true" ]; then

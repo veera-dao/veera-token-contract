@@ -3,25 +3,6 @@ pragma solidity ^0.8.24;
 
 import {Script, stdJson} from "forge-std/Script.sol";
 
-// LayerZero endpoints
-address constant BASE_MAINNET_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
-address constant BASE_TESTNET_LZ_ENDPOINT = 0x6EDCE65403992e310A62460808c4b910D972f10f;
-address constant BSC_MAINNET_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
-address constant BSC_TESTNET_LZ_ENDPOINT = 0x6EDCE65403992e310A62460808c4b910D972f10f;
-
-// LayerZero endpoint IDs
-uint32 constant BASE_TESTNET_EID = 40245;
-uint32 constant BASE_MAINNET_EID = 30184;
-uint32 constant BSC_MAINNET_EID = 30102;
-uint32 constant BSC_TESTNET_EID = 40102;
-
-// Chain IDs
-uint256 constant BASE_MAINNET_CHAINID = 8453;
-uint256 constant BASE_TESTNET_CHAINID = 84532;
-uint256 constant BSC_MAINNET_CHAINID = 56;
-uint256 constant BSC_TESTNET_CHAINID = 97;
-uint256 constant LOCAL_CHAINID = 31337;
-
 contract HelperConfig is Script {
     using stdJson for string;
 
@@ -52,10 +33,11 @@ contract HelperConfig is Script {
     ManifestConfig public manifestConfig;
 
     constructor() {
-        string memory path = string.concat(vm.projectRoot(), "/deploy_manifest.json");
+        string memory manifestPath = vm.envString("DEPLOY_MANIFEST_PATH");
+        string memory path = string.concat(vm.projectRoot(), "/", manifestPath);
 
         // Validate file existence
-        require(vm.exists(path), "HelperConfig: deploy_manifest.json file does not exist at project root");
+        require(vm.exists(path), string.concat("HelperConfig: deploy manifest file does not exist at ", path));
 
         // forge-lint: disable-next-line(unsafe-cheatcode)
         string memory json = vm.readFile(path);
@@ -128,7 +110,7 @@ contract HelperConfig is Script {
             manifestConfig.lzEndpoint = address(0);
         }
 
-        string memory eidKey = string.concat(networkKey, ".eid");
+        string memory eidKey = string.concat(networkKey, ".lzEid");
         if (vm.keyExistsJson(json, eidKey)) {
             manifestConfig.eid = uint32(vm.parseUint(json.readString(eidKey)));
         } else {

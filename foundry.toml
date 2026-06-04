@@ -21,7 +21,9 @@ remappings = [
     "solidity-bytes-utils/=lib/solidity-bytes-utils/"
 ]
 fs_permissions = [
-    { access = "read", path = "./deploy_manifest.json" },
+    { access = "read", path = "./deploy_manifest.mainnet.json" },
+    { access = "read", path = "./deploy_manifest.testnet.json" },
+    { access = "read", path = "./deploy_manifest.local.json" },
     { access = "read", path = "./verified-artifacts" }
 ]
 

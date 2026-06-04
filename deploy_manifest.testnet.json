@@ -14,32 +14,19 @@
   "evmVersion": "cancun",
   "viaIR": true,
   "networks": {
-    "8453": {
-      "rpcIdentifier": "base_mainnet",
-      "targetAdmin": "0xd2b8875b840D3BD574E1e6b440888e110632A0FD",
-      "initialMintRecipient": "0xd2b8875b840D3BD574E1e6b440888e110632A0FD",
-      "expectedPostDeploymentSupply": "1000000000000000000000000000",
-      "lzEndpoint": "0x1a44076050125825900e736c501f859c50fE728c",
-      "eid": "30184",
-      "expectedBridgeAddress": "0xfc23bAa8d3eDD93B872Bef34793D58b8AF25F9cf"
-    },
-    "56": {
-      "rpcIdentifier": "bsc_mainnet",
-      "targetAdmin": "0xd2b8875b840D3BD574E1e6b440888e110632A0FD",
-      "initialMintRecipient": "0x0000000000000000000000000000000000000000",
-      "expectedPostDeploymentSupply": "0",
-      "lzEndpoint": "0x1a44076050125825900e736c501f859c50fE728c",
-      "eid": "30102",
-      "expectedBridgeAddress": "0xfc23bAa8d3eDD93B872Bef34793D58b8AF25F9cf"
-    },
     "84532": {
       "rpcIdentifier": "base_testnet",
       "targetAdmin": "0xfEDB58C317d347e265990888919879a5d392a12c",
       "initialMintRecipient": "0xfEDB58C317d347e265990888919879a5d392a12c",
       "expectedPostDeploymentSupply": "1000000000000000000000000000",
       "lzEndpoint": "0x6EDCE65403992e310A62460808c4b910D972f10f",
-      "eid": "40245",
-      "expectedBridgeAddress": "0x4c46FA77db480A364C77dd3E870E7e9fcE87642f"
+      "lzEid": "40245",
+      "expectedBridgeAddress": "0x4c46FA77db480A364C77dd3E870E7e9fcE87642f",
+      "lzConfirmations": 1,
+      "lzReceiveGas": 200000,
+      "lzRequiredDVNs": [
+        "LayerZero Labs"
+      ]
     },
     "97": {
       "rpcIdentifier": "bsc_testnet",
@@ -47,8 +34,13 @@
       "initialMintRecipient": "0x0000000000000000000000000000000000000000",
       "expectedPostDeploymentSupply": "0",
       "lzEndpoint": "0x6EDCE65403992e310A62460808c4b910D972f10f",
-      "eid": "40102",
-      "expectedBridgeAddress": "0x782FDcecca40179142D68Dcd73A3a4682E69DaCa"
+      "lzEid": "40102",
+      "expectedBridgeAddress": "0x782FDcecca40179142D68Dcd73A3a4682E69DaCa",
+      "lzConfirmations": 1,
+      "lzReceiveGas": 200000,
+      "lzRequiredDVNs": [
+        "LayerZero Labs"
+      ]
     },
     "31337": {
       "rpcIdentifier": "local_anvil",
@@ -56,8 +48,11 @@
       "initialMintRecipient": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "expectedPostDeploymentSupply": "1000000000000000000000000000",
       "lzEndpoint": "0x0000000000000000000000000000000000000000",
-      "eid": "0",
-      "expectedBridgeAddress": "0x0000000000000000000000000000000000000000"
+      "lzEid": "0",
+      "expectedBridgeAddress": "0x0000000000000000000000000000000000000000",
+      "lzConfirmations": 1,
+      "lzRequiredDVNs": [],
+      "lzReceiveGas": 200000
     }
   }
 }
