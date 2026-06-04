@@ -395,7 +395,7 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
         // Set a rate limit: 50e18 per 1 hour for destination B_EID
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 50e18, window: 1 hours});
-        adapterA.setRateLimitConfigs(configs);
+        adapterA.setRateLimits(configs);
 
         // First send of 50e18 should succeed (exactly at limit)
         uint256 amountToSend = 50e18;
@@ -430,7 +430,7 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
         // Set rate limit: 50e18 per 1 hour
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 50e18, window: 1 hours});
-        adapterA.setRateLimitConfigs(configs);
+        adapterA.setRateLimits(configs);
 
         uint256 amountToSend = 50e18;
 
@@ -475,18 +475,18 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
         address nonOwner = makeAddr("nonOwner");
         vm.prank(nonOwner);
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
-        adapterA.setRateLimitConfigs(configs);
+        adapterA.setRateLimits(configs);
     }
 
     function test_RateLimiter_DisableBySettingZero() public {
         // Enable rate limit
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 50e18, window: 1 hours});
-        adapterA.setRateLimitConfigs(configs);
+        adapterA.setRateLimits(configs);
 
         // Disable it by setting limit=0, window=0
         configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 0, window: 0});
-        adapterA.setRateLimitConfigs(configs);
+        adapterA.setRateLimits(configs);
 
         // Should be able to send any amount now
         uint256 amountToSend = 90e18;

@@ -46,9 +46,7 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter, RateLimiter, Pausable {
     constructor(address _token, address _lzEndpoint, address _delegate)
         OFTAdapter(_token, _lzEndpoint, _delegate)
         Ownable(_delegate)
-    {
-        if (_token == address(0)) revert InvalidTokenAddress();
-    }
+    {}
 
     /**
      * @notice Sets outbound rate limits per destination endpoint.
@@ -56,7 +54,7 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter, RateLimiter, Pausable {
      *      rate limiting for a specific destination.
      * @param _rateLimitConfigs Array of rate limit configurations.
      */
-    function setRateLimitConfigs(RateLimiter.RateLimitConfig[] calldata _rateLimitConfigs) external onlyOwner {
+    function setRateLimits(RateLimiter.RateLimitConfig[] calldata _rateLimitConfigs) external onlyOwner {
         RateLimiter._setRateLimits(_rateLimitConfigs);
     }
 
