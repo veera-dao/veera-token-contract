@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {LayerZeroTestHelper, OFTMock} from "./LayerZeroTestHelper.sol";
+import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 import {SendParam, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oft/OFTCore.sol";
 import {Veera} from "../src/Veera.sol";
@@ -645,4 +646,403 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
         verifyPackets(A_EID, address(adapterA));
         assertEq(tokenA.balanceOf(userA), initialBalance + amountToSend);
     }
+
+    // =========================================================================
+    // Reentrancy tests
+    // =========================================================================
+    function test_Reentrancy_RescueERC20_HandlesCorrectly() public {
+        ReentrancyGuardTester tester = new ReentrancyGuardTester(adapterA);
+        MaliciousReentrantToken malToken = new MaliciousReentrantToken(address(tester));
+
+        tester.setShouldReenterRescue(true, address(malToken));
+
+        // When the owner calls rescueERC20, it triggers safeTransfer to the tester.
+        // Tester's callback will try to call rescueERC20 again.
+        // It will fail because the tester is not the owner of the adapter.
+        vm.expectRevert();
+        adapterA.rescueERC20(address(malToken), address(tester), 10e18);
+    }
+
+    function test_Reentrancy_Send_HandlesCorrectly() public {
+        // Deploy adapter with custom malicious token to test reentrancy in _debit
+        MaliciousBurnToken malToken = new MaliciousBurnToken(address(endpoints[A_EID]));
+        VeeraMintBurnOFTAdapter malAdapter =
+            new VeeraMintBurnOFTAdapter(address(malToken), address(endpoints[A_EID]), address(this));
+
+        malToken.setAdapter(address(malAdapter));
+        malToken.setShouldReenter(true);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: 10e18,
+            minAmountLD: 10e18,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        // Setup mock peer for endpoint
+        address[] memory ofts = new address[](2);
+        ofts[0] = address(malAdapter);
+        ofts[1] = address(oftB);
+        wireOApps(ofts);
+
+        MessagingFee memory fee = malAdapter.quoteSend(sendParam, false);
+
+        // Since the malicious token tries to reenter on burnFrom, it should either revert or behave safely.
+        // Let's assert it reverts or executes safely without corrupting any state.
+        vm.expectRevert();
+        malAdapter.send{value: fee.nativeFee}(sendParam, fee, payable(address(this)));
+    }
+
+    // =========================================================================
+    // Role Access tests
+    // =========================================================================
+    function test_RoleAccess_Pause_OnlyOwner() public {
+        address nonOwner = makeAddr("nonOwner");
+        vm.prank(nonOwner);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
+        adapterA.pause();
+    }
+
+    function test_RoleAccess_Unpause_OnlyOwner() public {
+        adapterA.pause();
+        address nonOwner = makeAddr("nonOwner");
+        vm.prank(nonOwner);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
+        adapterA.unpause();
+    }
+
+    function test_RoleAccess_SetRateLimits_OnlyOwner() public {
+        address nonOwner = makeAddr("nonOwner");
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](0);
+        vm.prank(nonOwner);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
+        adapterA.setRateLimits(configs);
+    }
+
+    function test_RoleAccess_RescueERC20_OnlyOwner() public {
+        address nonOwner = makeAddr("nonOwner");
+        vm.prank(nonOwner);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
+        adapterA.rescueERC20(address(tokenA), nonOwner, 10e18);
+    }
+
+    function test_RoleAccess_LzReceive_OnlyEndpoint() public {
+        address nonEndpoint = makeAddr("nonEndpoint");
+        Origin memory origin = Origin({srcEid: B_EID, sender: addressToBytes32(userB), nonce: 1});
+        bytes memory message = "";
+
+        vm.prank(nonEndpoint);
+        vm.expectRevert(abi.encodeWithSignature("OnlyEndpoint(address)", nonEndpoint));
+        adapterA.lzReceive(origin, bytes32(0), message, address(0), "");
+    }
+
+    // =========================================================================
+    // Pause Effects tests
+    // =========================================================================
+    function test_PauseEffects_Send_Reverts() public {
+        adapterA.pause();
+        uint256 amountToSend = 10e18;
+
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        vm.prank(userA);
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        adapterA.send(sendParam, MessagingFee(0, 0), payable(userA));
+    }
+
+    function test_PauseEffects_LzReceive_Reverts() public {
+        // Prepare a message
+        uint256 amountToSend = 10e18;
+        oftB.mint(userB, amountToSend);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+        SendParam memory sendParam = SendParam({
+            dstEid: A_EID,
+            to: addressToBytes32(userA),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = oftB.quoteSend(sendParam, false);
+        vm.prank(userB);
+        oftB.send{value: fee.nativeFee}(sendParam, fee, payable(userB));
+
+        // Pause the adapter on chain A
+        adapterA.pause();
+
+        // Deliver packets should revert due to pause
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        verifyPackets(A_EID, address(adapterA));
+    }
+
+    function test_PauseEffects_QuoteSend_Reverts() public {
+        adapterA.pause();
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: 10e18,
+            minAmountLD: 10e18,
+            extraOptions: "",
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        adapterA.quoteSend(sendParam, false);
+    }
+
+    function test_PauseEffects_AdminFunctions_NotBlocked() public {
+        adapterA.pause();
+
+        // Owner should still be able to rescue tokens even if paused
+        Veera randomToken = new Veera("Random", "RND", address(this), 100e18, 100e18);
+        randomToken.transfer(address(adapterA), 10e18);
+
+        adapterA.rescueERC20(address(randomToken), address(this), 10e18);
+        assertEq(randomToken.balanceOf(address(this)), 100e18);
+
+        // Owner should still be able to set rate limits even if paused
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 50e18, window: 1 hours});
+        adapterA.setRateLimits(configs);
+    }
+
+    // =========================================================================
+    // Fuzzing tests
+    // =========================================================================
+    function testFuzz_Send_Amounts(uint256 amount) public {
+        // Bound amount between 1 and initialBalance
+        amount = bound(amount, 1, initialBalance);
+
+        // Ensure we remove dust if the conversion rate applies (Veera is 18 decimals, conversion is 10^12)
+        uint256 amountCleaned = (amount / 10 ** 12) * 10 ** 12;
+        vm.assume(amountCleaned > 0);
+
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountCleaned);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountCleaned,
+            minAmountLD: amountCleaned,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+
+        vm.prank(userA);
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+
+        assertEq(tokenA.balanceOf(userA), initialBalance - amountCleaned);
+
+        verifyPackets(B_EID, address(oftB));
+        assertEq(oftB.balanceOf(userB), amountCleaned);
+    }
+
+    function testFuzz_RescueERC20_ZeroAddresses(address token, address to, uint256 amount) public {
+        // If token is zero address, should revert
+        if (token == address(0)) {
+            vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidTokenAddress.selector));
+            adapterA.rescueERC20(token, to, amount);
+        }
+        // If recipient is zero address, should revert
+        else if (to == address(0)) {
+            vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidReceiverAddress.selector));
+            adapterA.rescueERC20(token, to, amount);
+        }
+    }
+
+    function testFuzz_Constructor_ZeroAddresses(address token, address lzEndpoint, address delegate, uint8 zeroIndex)
+        public
+    {
+        zeroIndex = uint8(bound(zeroIndex, 0, 2));
+
+        address t = token;
+        address lz = lzEndpoint;
+        address d = delegate;
+
+        if (zeroIndex == 0) {
+            t = address(0);
+        } else if (zeroIndex == 1) {
+            lz = address(0);
+        } else {
+            d = address(0);
+        }
+
+        // Ensure other addresses are not zero to avoid overlapping failures
+        if (t == address(0) && token == address(0)) t = address(1);
+        if (lz == address(0) && lzEndpoint == address(0)) lz = address(1);
+        if (d == address(0) && delegate == address(0)) d = address(1);
+
+        vm.expectRevert();
+        new VeeraMintBurnOFTAdapter(t, lz, d);
+    }
+
+    function test_Send_RevertsIf_ZeroReceiver() public {
+        uint256 amountToSend = 10e18;
+        oftB.mint(userB, amountToSend);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+        SendParam memory sendParam = SendParam({
+            dstEid: A_EID,
+            to: bytes32(0),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = oftB.quoteSend(sendParam, false);
+
+        vm.prank(userB);
+        oftB.send{value: fee.nativeFee}(sendParam, fee, payable(userB));
+
+        // Delivery should revert because _to is zero address on Chain A (adapterA)
+        vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidReceiverAddress.selector));
+        verifyPackets(A_EID, address(adapterA));
+    }
 }
+
+// Reentrancy tester contract
+contract ReentrancyGuardTester {
+    using OptionsBuilder for bytes;
+
+    VeeraMintBurnOFTAdapter public adapter;
+    bool public shouldReenterRescue;
+    bool public shouldReenterSend;
+    address public maliciousToken;
+
+    constructor(VeeraMintBurnOFTAdapter _adapter) {
+        adapter = _adapter;
+    }
+
+    function setShouldReenterRescue(bool _val, address _token) external {
+        shouldReenterRescue = _val;
+        maliciousToken = _token;
+    }
+
+    function setShouldReenterSend(bool _val) external {
+        shouldReenterSend = _val;
+    }
+
+    // Fallback/receive function to try to reenter send
+    receive() external payable {
+        if (shouldReenterSend) {
+            shouldReenterSend = false; // Prevent infinite loop
+
+            // Build options and send parameters to attempt reentrancy
+            bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+            SendParam memory sendParam = SendParam({
+                dstEid: 2,
+                to: bytes32(uint256(uint160(address(this)))),
+                amountLD: 10e18,
+                minAmountLD: 10e18,
+                extraOptions: options,
+                composeMsg: "",
+                oftCmd: ""
+            });
+            // Try to call send
+            MessagingFee memory fee = adapter.quoteSend(sendParam, false);
+            adapter.send{value: msg.value}(sendParam, fee, payable(address(this)));
+        }
+    }
+
+    // Call callback from malicious token to try to reenter rescueERC20
+    function handleCallback() external {
+        if (shouldReenterRescue) {
+            shouldReenterRescue = false;
+            // Owner is address(this) of the test suite, but let's test if calling it from non-owner reverts
+            adapter.rescueERC20(maliciousToken, address(this), 1);
+        }
+    }
+}
+
+// A mock malicious token that triggers callback on transfer
+contract MaliciousReentrantToken {
+    address public tester;
+
+    constructor(address _tester) {
+        tester = _tester;
+    }
+
+    function transfer(address, uint256) external returns (bool) {
+        ReentrancyGuardTester(payable(tester)).handleCallback();
+        return true;
+    }
+
+    function safeTransfer(address, uint256) external {
+        ReentrancyGuardTester(payable(tester)).handleCallback();
+    }
+
+    function balanceOf(address) external pure returns (uint256) {
+        return 100e18;
+    }
+}
+
+contract MaliciousBurnToken {
+    using OptionsBuilder for bytes;
+
+    address public adapter;
+    bool public shouldReenter;
+    address public endpoint;
+
+    constructor(address _endpoint) {
+        endpoint = _endpoint;
+    }
+
+    function setAdapter(address _adapter) external {
+        adapter = _adapter;
+    }
+
+    function setShouldReenter(bool _val) external {
+        shouldReenter = _val;
+    }
+
+    function decimals() external pure returns (uint8) {
+        return 18;
+    }
+
+    function burnFrom(address from, uint256 amount) external {
+        if (shouldReenter) {
+            shouldReenter = false;
+            // Attempt to reenter send
+            bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+            SendParam memory sendParam = SendParam({
+                dstEid: 2,
+                to: bytes32(uint256(uint160(from))),
+                amountLD: amount,
+                minAmountLD: amount,
+                extraOptions: options,
+                composeMsg: "",
+                oftCmd: ""
+            });
+            MessagingFee memory fee = VeeraMintBurnOFTAdapter(adapter).quoteSend(sendParam, false);
+            VeeraMintBurnOFTAdapter(adapter).send{value: 100}(sendParam, fee, payable(from));
+        }
+    }
+}
+
