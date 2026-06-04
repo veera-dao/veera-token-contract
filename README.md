@@ -98,7 +98,7 @@ To prevent this:
 
 ## 4. Deployment Script Execution
 
-The deployment is managed by `DeployVeera.s.sol`, which leverages `HelperConfig.s.sol` to parse `deploy_manifest.json` for chain-specific parameters.
+The deployment is managed by `DeployVeera.s.sol`, which leverages `HelperConfig.s.sol` to parse the manifest specified by the `DEPLOY_MANIFEST_PATH` environment variable (e.g. `deploy_manifest.testnet.json` or `deploy_manifest.mainnet.json`) for chain-specific parameters.
 
 ### Step-by-Step Execution Flow
 
@@ -129,7 +129,7 @@ graph TD
 
 ### Pre-Deployment Checklist
 
-Before broadcasting, ensure the following are configured in `deploy_manifest.json` under the specific target chain ID:
+Before broadcasting, ensure the following are configured in the active deployment manifest under the specific target chain ID:
 - `targetAdmin`: Recipient of the default admin role. Must be a deployed Gnosis Safe contract address.
 - `initialMintRecipient`: Recipient of the initial supply (home chain only).
 - `expectedPostDeploymentSupply`: Total supply expected post-execution (1B on Base, 0 on BSC).
@@ -148,10 +148,24 @@ The script will load the bytecode from the JSON file and append the constructor 
 ## 5. Deployment Management & Security Lifecycle
 
 ### Manifest File Maintenance
-The JSON configuration file `deploy_manifest.json` acts as the single source of truth for the deployment. Proposing modifications to any global parameters (like `salt` or `bootstrapAdmin`) or changing network configurations must be done with caution.
+The JSON configuration files `deploy_manifest.mainnet.json` and `deploy_manifest.testnet.json` act as the single source of truth for deployments. Proposing modifications to any global parameters (like `salt` or `bootstrapAdmin`) or changing network configurations must be done with caution.
+
 To guarantee manifest integrity and prevent unauthorized changes, the codebase implements two verification steps:
-1. **Solidity Code Integrity Hash:** The script `DeployVeera.s.sol` calculates the `keccak256` hash of the parsed global deterministic parameters and asserts that it matches `EXPECTED_MANIFEST_INTEGRITY_HASH`. Proposing a manifest change will require updating this code hash in `DeployVeera.s.sol`.
-2. **SHA-256 Checksum Validation:** The utility script `scripts/verify-manifest-checksum.sh` computes the SHA-256 hash of `deploy_manifest.json` and compares it against the approved checksum (`5b134cc4bf299289e9ab9bc6ae7c356faa1e3e29807f00d54811343e5b3c2435`).
+1. **Solidity Code Integrity Hash:** The script `DeployVeera.s.sol` calculates the `keccak256` hash of the parsed global deterministic parameters and asserts that it matches `EXPECTED_MANIFEST_INTEGRITY_HASH`. Proposing a global parameter manifest change requires updating this code hash in `DeployVeera.s.sol`.
+2. **SHA-256 Checksum Validation:** The utility script [verify-manifest-checksum.sh](scripts/verify-manifest-checksum.sh) computes the SHA-256 hash of `deploy_manifest.mainnet.json` and compares it against the approved checksum defined directly in the script.
+
+> [!IMPORTANT]
+> **Updating the Checksum Script:**
+> When the mainnet manifest `deploy_manifest.mainnet.json` is intentionally changed, the checksum validation will fail. To update the approved checksum:
+> 1. Run the verification script:
+>    ```bash
+>    ./scripts/verify-manifest-checksum.sh
+>    ```
+>    This will compute and display the updated checksum.
+> 2. Copy the new checksum from the terminal output.
+> 3. Open [verify-manifest-checksum.sh](scripts/verify-manifest-checksum.sh) and update the `APPROVED_CHECKSUM` variable with the copied value.
+> 4. Re-run `./scripts/verify-manifest-checksum.sh` to ensure the check passes.
+
 
 ### Predicted Addresses Per Chain
 With optimization enabled (Solidity 0.8.24, Cancun, 200 runs) and the standard Arachnid CREATE2 factory, the predicted token address is:
@@ -284,3 +298,54 @@ After deploying the contract, you can run comprehensive integration tests to ver
    ```bash
    npm test
    ```
+
+---
+
+## 11. LayerZero Pathway Configuration & Wiring (Hardhat Suite)
+
+While Foundry is used for compiling, testing, and deterministic CREATE2 contract deployments, LayerZero V2 configurations (such as peer wiring, pathway verification, send/receive library settings, enforced option parameters, and DVN settings) are managed via Hardhat using LayerZero’s official devtools (`@layerzerolabs/toolbox-hardhat`).
+
+### 11.1 Single Source of Truth Address Invariant
+To prevent configuration drift, all contract addresses are resolved dynamically on-the-fly from the deployment manifest specified by the `DEPLOY_MANIFEST_PATH` environment variable (e.g. [deploy_manifest.mainnet.json](deploy_manifest.mainnet.json)). We **never** hardcode deployed contract addresses across different configuration files.
+
+### 11.2 Operational Scripts
+The root `package.json` contains pre-configured scripts for pathway wiring and diagnostics.
+
+| Action | Testnet (Base Sepolia ↔ BSC Testnet) | Mainnet (Base ↔ BSC) |
+| :--- | :--- | :--- |
+| **Configure Wiring & Peers** | `npm run lz:wire:testnet` | `npm run lz:wire:mainnet` |
+| **Read Back Peers** | `npm run lz:peers:testnet` | `npm run lz:peers:mainnet` |
+| **Read Back Config & DVNs** | `npm run lz:config:testnet` | `npm run lz:config:mainnet` |
+
+### 11.3 Gnosis Safe Multisig Wiring Workflow
+Because the `VeeraMintBurnOFTAdapter` contracts on Mainnet are owned by the Gnosis Safe multisig `targetAdmin` contract, wiring configuration transactions cannot be signed by a standard EOA private key. 
+
+To wire pathways for Gnosis Safe-owned contracts:
+1. Ensure your `.env` does not contain a `LZ_CONFIG_PRIVATE_KEY` (or leave it unset/empty).
+2. Execute the wiring task. The LayerZero toolchain will automatically detect that no private key is present to sign, perform checks on-chain, and generate/propose the raw transaction payloads (calldata).
+3. Copy the proposed calldata, target addresses, and value fields from the terminal.
+4. Open the Gnosis Safe dashboard on the respective chain.
+5. Launch the **Transaction Builder** app.
+6. Input the target contract address, paste the generated calldata, and enqueue the transaction.
+7. Repeat for all enqueued pathways, and sign/execute the transactions with the Safe owners.
+
+### 11.4 Post-Wiring Verification & Diagnostics
+Before authorizing a bridge to mint/burn tokens, you **must** perform a configuration check:
+1. Run the wiring task on the selected network.
+2. Query the actual configured peers using:
+   ```bash
+   npm run lz:peers:testnet
+   ```
+3. Query and export the pathway configurations, verifying dvns and confirmations:
+   ```bash
+   npm run lz:config:testnet
+   ```
+4. Verify that the output lists the correct expected peers and connection statuses.
+
+### 11.5 Mainnet Security and DVN Policy
+* **Testnet Policy:** A single DVN configuration (using the default `LayerZero Labs` DVN) is acceptable for initial integration testing.
+* **Mainnet Policy:** A single-DVN configuration poses a central point of compromise. For mainnet production deployments:
+  - Configure **multiple required DVNs** (e.g., Google Cloud DVN, Nethermind DVN, LayerZero Labs DVN) via `lzRequiredDVNs` in the network configuration block of the active manifest (e.g. [deploy_manifest.mainnet.json](deploy_manifest.mainnet.json)).
+  - Alternatively, configure a required/optional threshold setup.
+  - Do not enable production bridge use (e.g., granting `MINTER_ROLE` to the bridge adapter on the token contract) until the multi-DVN config is successfully wired and read back matching the approved security policy.
+
