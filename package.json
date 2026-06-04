@@ -1,0 +1,40 @@
+{
+  "name": "veera-token-contract",
+  "version": "1.0.0",
+  "description": "Veera Token Contract and LayerZero Config Suite",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "clean": "hardhat clean",
+    "lz:config:mainnet": "hardhat lz:oapp:config:get --oapp-config layerzero.config.ts",
+    "lz:config:testnet": "hardhat lz:oapp:config:get --oapp-config layerzero.config.ts",
+    "lz:peers:mainnet": "hardhat lz:oapp:peers:get --oapp-config layerzero.config.ts",
+    "lz:peers:testnet": "hardhat lz:oapp:peers:get --oapp-config layerzero.config.ts",
+    "lz:wire:mainnet": "hardhat lz:oapp:wire --oapp-config layerzero.config.ts --safe",
+    "lz:wire:mainnet:dry-run": "hardhat lz:oapp:wire --oapp-config layerzero.config.ts --dry-run",
+    "lz:wire:testnet": "hardhat lz:oapp:wire --oapp-config layerzero.config.ts",
+    "lz:wire:testnet:safe": "hardhat lz:oapp:wire --oapp-config layerzero.config.ts --safe"
+  },
+  "devDependencies": {
+    "@layerzerolabs/lz-definitions": "^3.0.148",
+    "@layerzerolabs/lz-v2-utilities": "^3.0.148",
+    "@layerzerolabs/metadata-tools": "^3.0.0",
+    "@layerzerolabs/oapp-evm": "^0.4.1",
+    "@layerzerolabs/toolbox-hardhat": "~0.6.13",
+    "@nomicfoundation/hardhat-ethers": "^3.0.5",
+    "@nomicfoundation/hardhat-foundry": "^1.1.2",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "hardhat-deploy": "^0.12.1",
+    "@openzeppelin/contracts": "^5.0.2",
+    "@safe-global/safe-core-sdk-types": "^2.3.0",
+    "@types/node": "^20.14.9",
+    "dotenv": "^16.4.5",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.22.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.2"
+  },
+  "overrides": {
+    "ethers": "^5.7.2"
+  }
+}
