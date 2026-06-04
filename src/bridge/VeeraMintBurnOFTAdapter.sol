@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {OFTAdapter} from "@layerzerolabs/oapp-evm/contracts/oft/OFTAdapter.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {OFTAdapter} from "@layerzerolabs/oapp-evm/contracts/oft/OFTAdapter.sol";
+import {SendParam, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oft/interfaces/IOFT.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {RateLimiter} from "@layerzerolabs/oapp-evm/contracts/oapp/utils/RateLimiter.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Veera} from "../Veera.sol";
 
 /**
@@ -14,8 +17,10 @@ import {Veera} from "../Veera.sol";
  * - On debit (bridge out): the adapter burns tokens directly from sender via `burnFrom`.
  * - On credit (bridge in): the adapter mints tokens directly to recipient.
  * @dev Important: Only one OFTAdapter should be deployed per chain for this token. Multiple adapters break unified liquidity and can lead to permanent token loss on destination chains.
+ * @dev Rate limiting: Optional outbound rate limiting per destination endpoint. Disabled by default
+ *      (limit=0). The owner can enable it at any time via `setRateLimitConfigs`.
  */
-contract VeeraMintBurnOFTAdapter is OFTAdapter {
+contract VeeraMintBurnOFTAdapter is OFTAdapter, RateLimiter, Pausable {
     using SafeERC20 for IERC20;
 
     // Errors
@@ -23,6 +28,14 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter {
     error InvalidReceiverAddress();
 
     event ERC20Rescued(address indexed token, address indexed to, uint256 amount);
+
+    function pause() external onlyOwner {
+        Pausable._pause();
+    }
+
+    function unpause() external onlyOwner {
+        Pausable._unpause();
+    }
 
     /**
      * @notice Initializes the OFT Adapter with the underlying Veera token.
@@ -38,6 +51,16 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter {
     }
 
     /**
+     * @notice Sets outbound rate limits per destination endpoint.
+     * @dev Only callable by the owner. Set limit=0 and window=0 to disable
+     *      rate limiting for a specific destination.
+     * @param _rateLimitConfigs Array of rate limit configurations.
+     */
+    function setRateLimitConfigs(RateLimiter.RateLimitConfig[] calldata _rateLimitConfigs) external onlyOwner {
+        RateLimiter._setRateLimits(_rateLimitConfigs);
+    }
+
+    /**
      * @dev Burns tokens from the sender's balance.
      * @param _from The address to debit from.
      * @param _amountLD The amount to send (in local decimals).
@@ -49,13 +72,22 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter {
     function _debit(address _from, uint256 _amountLD, uint256 _minAmountLD, uint32 _dstEid)
         internal
         override
+        whenNotPaused
         returns (uint256 amountSentLD, uint256 amountReceivedLD)
     {
-        (amountSentLD, amountReceivedLD) = _debitView(_amountLD, _minAmountLD, _dstEid);
+        (amountSentLD, amountReceivedLD) = super._debitView(_amountLD, _minAmountLD, _dstEid);
+
+        // Rate limit check: only enforced when a limit is configured for this destination.
+        // When limit == 0 (default/unconfigured), rate limiting is bypassed.
+        if (RateLimiter.rateLimits[_dstEid].limit > 0) {
+            RateLimiter._checkAndUpdateRateLimit(_dstEid, amountSentLD);
+        }
 
         // Burn tokens directly from the sender's balance.
         // This requires the sender to have approved the adapter contract on the underlying token.
         Veera(address(innerToken)).burnFrom(_from, amountSentLD);
+
+        return (amountSentLD, amountReceivedLD);
     }
 
     /**
@@ -71,6 +103,7 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter {
     )
         internal
         override
+        whenNotPaused
         returns (uint256 amountReceivedLD)
     {
         if (_to == address(0)) revert InvalidReceiverAddress();
@@ -79,6 +112,31 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter {
         // Note: Bridging will revert if the token is paused or if minting would exceed the supply cap.
         Veera(address(innerToken)).mint(_to, _amountLD);
         return _amountLD;
+    }
+
+    /**
+     * @dev Internal function to mock the amount mutation from a OFT debit() operation.
+     * @param _amountLD The amount to send in local decimals.
+     * @param _minAmountLD The minimum amount to send in local decimals.
+     * @dev _dstEid The destination endpoint ID.
+     * @return amountSentLD The amount sent, in local decimals.
+     * @return amountReceivedLD The amount to be received on the remote chain, in local decimals.
+     *
+     * @dev This is where things like fees would be calculated and deducted from the amount to be received on the remote.
+     */
+    function _debitView(
+        uint256 _amountLD,
+        uint256 _minAmountLD,
+        uint32 /*_dstEid*/
+    )
+        internal
+        view
+        virtual
+        override
+        whenNotPaused
+        returns (uint256 amountSentLD, uint256 amountReceivedLD)
+    {
+        return super._debitView(_amountLD, _minAmountLD, 0);
     }
 
     /**

@@ -6,6 +6,7 @@ import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/Option
 import {SendParam, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oft/OFTCore.sol";
 import {Veera} from "../src/Veera.sol";
 import {VeeraMintBurnOFTAdapter} from "../src/bridge/VeeraMintBurnOFTAdapter.sol";
+import {RateLimiter} from "@layerzerolabs/oapp-evm/contracts/oapp/utils/RateLimiter.sol";
 
 contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
     using OptionsBuilder for bytes;
@@ -356,5 +357,292 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
     function test_Constructor_RevertsIf_ZeroDelegateAddress() public {
         vm.expectRevert(abi.encodeWithSignature("OwnableInvalidOwner(address)", address(0)));
         new VeeraMintBurnOFTAdapter(address(tokenA), address(endpoints[A_EID]), address(0));
+    }
+
+    // =========================================================================
+    // Rate Limiter Tests
+    // =========================================================================
+
+    function test_RateLimiter_DefaultOff() public {
+        // With no rate limit configured, transfers should work normally
+        uint256 amountToSend = 50e18;
+
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+
+        vm.prank(userA);
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+
+        // Should succeed without any rate limit configured
+        assertEq(tokenA.balanceOf(userA), initialBalance - amountToSend);
+    }
+
+    function test_RateLimiter_EnforcesLimit() public {
+        // Set a rate limit: 50e18 per 1 hour for destination B_EID
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 50e18, window: 1 hours});
+        adapterA.setRateLimitConfigs(configs);
+
+        // First send of 50e18 should succeed (exactly at limit)
+        uint256 amountToSend = 50e18;
+
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend * 2);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+
+        vm.prank(userA);
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+
+        // Second send should revert (rate limit exceeded)
+        vm.prank(userA);
+        vm.expectRevert(abi.encodeWithSelector(RateLimiter.RateLimitExceeded.selector));
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+    }
+
+    function test_RateLimiter_WindowDecay() public {
+        // Set rate limit: 50e18 per 1 hour
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 50e18, window: 1 hours});
+        adapterA.setRateLimitConfigs(configs);
+
+        uint256 amountToSend = 50e18;
+
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend * 2);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+
+        // First send consumes entire limit
+        vm.prank(userA);
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+
+        // Advance time past the window
+        vm.warp(block.timestamp + 1 hours + 1);
+
+        // Mint more tokens to userA for the second send
+        tokenA.mint(userA, amountToSend);
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
+
+        // Should succeed again after window expires
+        vm.prank(userA);
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+    }
+
+    function test_RateLimiter_OnlyOwner() public {
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 50e18, window: 1 hours});
+
+        address nonOwner = makeAddr("nonOwner");
+        vm.prank(nonOwner);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
+        adapterA.setRateLimitConfigs(configs);
+    }
+
+    function test_RateLimiter_DisableBySettingZero() public {
+        // Enable rate limit
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 50e18, window: 1 hours});
+        adapterA.setRateLimitConfigs(configs);
+
+        // Disable it by setting limit=0, window=0
+        configs[0] = RateLimiter.RateLimitConfig({dstEid: B_EID, limit: 0, window: 0});
+        adapterA.setRateLimitConfigs(configs);
+
+        // Should be able to send any amount now
+        uint256 amountToSend = 90e18;
+
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+
+        vm.prank(userA);
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+
+        assertEq(tokenA.balanceOf(userA), initialBalance - amountToSend);
+    }
+
+    // =========================================================================
+    // Pausable Tests
+    // =========================================================================
+
+    function test_Adapter_Pause_OnlyOwner() public {
+        address nonOwner = makeAddr("nonOwner");
+
+        // 1. Non-owner calling pause() reverts
+        vm.prank(nonOwner);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
+        adapterA.pause();
+
+        // 2. Non-owner calling unpause() reverts
+        vm.prank(nonOwner);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", nonOwner));
+        adapterA.unpause();
+
+        // 3. Owner calling pause() succeeds
+        assertFalse(adapterA.paused());
+        adapterA.pause();
+        assertTrue(adapterA.paused());
+
+        // 4. Owner calling unpause() succeeds
+        adapterA.unpause();
+        assertFalse(adapterA.paused());
+    }
+
+    function test_Adapter_Pause_BlocksSend() public {
+        uint256 amountToSend = 50e18;
+
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+
+        // Pause the adapter
+        adapterA.pause();
+
+        // Send should fail with EnforcedPause
+        vm.prank(userA);
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+
+        // Unpause the adapter
+        adapterA.unpause();
+
+        // Send should succeed now
+        vm.prank(userA);
+        adapterA.send{value: fee.nativeFee}(sendParam, fee, payable(userA));
+        assertEq(tokenA.balanceOf(userA), initialBalance - amountToSend);
+    }
+
+    function test_Adapter_Pause_BlocksQuoteSend() public {
+        uint256 amountToSend = 50e18;
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: addressToBytes32(userB),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        // Pause the adapter
+        adapterA.pause();
+
+        // quoteSend should fail with EnforcedPause
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        adapterA.quoteSend(sendParam, false);
+
+        // Unpause the adapter
+        adapterA.unpause();
+
+        // quoteSend should succeed now
+        MessagingFee memory fee = adapterA.quoteSend(sendParam, false);
+        assertTrue(fee.nativeFee > 0);
+    }
+
+    function test_Adapter_Pause_BlocksCredit() public {
+        uint256 amountToSend = 40e18;
+
+        // Mint and send from Chain B to Chain A
+        oftB.mint(userB, amountToSend);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+
+        SendParam memory sendParam = SendParam({
+            dstEid: A_EID,
+            to: addressToBytes32(userA),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        MessagingFee memory fee = oftB.quoteSend(sendParam, false);
+
+        vm.prank(userB);
+        oftB.send{value: fee.nativeFee}(sendParam, fee, payable(userB));
+
+        // Pause the adapter on Chain A before packet delivery
+        adapterA.pause();
+
+        // Packet delivery (credit) should revert on Chain A due to pause
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        this.verifyPackets(A_EID, address(adapterA));
+
+        // Unpause the adapter
+        adapterA.unpause();
+
+        // Delivery should now succeed
+        verifyPackets(A_EID, address(adapterA));
+        assertEq(tokenA.balanceOf(userA), initialBalance + amountToSend);
     }
 }
