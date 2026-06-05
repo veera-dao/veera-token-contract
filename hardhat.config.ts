@@ -7,9 +7,12 @@ import 'hardhat-deploy'
 import type { HardhatUserConfig } from 'hardhat/config'
 import { EndpointId } from '@layerzerolabs/lz-definitions'
 
-// Key used for signing configuration transactions
 const PRIVATE_KEY = process.env.LZ_CONFIG_PRIVATE_KEY
 const accounts = PRIVATE_KEY ? [PRIVATE_KEY] : []
+
+if (process.argv.includes('lz:oapp:wire') && !PRIVATE_KEY && !process.argv.includes('--safe') && !process.argv.includes('--dry-run')) {
+  throw new Error('LZ_CONFIG_PRIVATE_KEY is not set in the environment variables, and --safe / --dry-run is not in use.')
+}
 
 const config: HardhatUserConfig = {
   paths: {

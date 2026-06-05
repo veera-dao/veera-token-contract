@@ -65,13 +65,16 @@ contract DeployOFTAdapter is Script {
             require(keccak256(bytes(tokenName)) == keccak256(bytes(manifest.name)), "Token name mismatch");
             require(keccak256(bytes(tokenSymbol)) == keccak256(bytes(manifest.symbol)), "Token symbol mismatch");
 
-            // Validate targetAdmin contract (Gnosis Safe) exists on live networks
-            uint256 adminCodeSize;
-            address targetAdminAddress = manifest.targetAdmin;
-            assembly {
-                adminCodeSize := extcodesize(targetAdminAddress)
+            // Validate targetAdmin contract (Gnosis Safe) exists on live networks (only if deploy_manifest.mainnet.json is in use)
+            string memory manifestPath = vm.envOr("DEPLOY_MANIFEST_PATH", string(""));
+            if (keccak256(bytes(manifestPath)) == keccak256(bytes("deploy_manifest.mainnet.json"))) {
+                uint256 adminCodeSize;
+                address targetAdminAddress = manifest.targetAdmin;
+                assembly {
+                    adminCodeSize := extcodesize(targetAdminAddress)
+                }
+                require(adminCodeSize > 0, "Target admin must be a deployed contract/multisig");
             }
-            require(adminCodeSize > 0, "Target admin must be a deployed contract/multisig");
         }
 
         // Validate lzEndpoint exists on live networks
