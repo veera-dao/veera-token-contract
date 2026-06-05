@@ -4,13 +4,13 @@
 # Deploys VeeraMintBurnOFTAdapter via CREATE2 to achieve deterministic addressing.
 #
 # Usage:
-#   ./scripts/deploy-bridge.sh                         # Deploy with config from .env
-#   ./scripts/deploy-bridge.sh <url>                   # Override RPC
-#   DRY_RUN=true ./scripts/deploy-bridge.sh            # Dry run / simulation
-#   ./scripts/deploy-bridge.sh --keystore <path>       # Use a keystore
-#   ./scripts/deploy-bridge.sh --private-key <key>     # Use a private key
-#   ./scripts/deploy-bridge.sh --ledger                # Use Ledger hardware wallet
-#   ./scripts/deploy-bridge.sh --trezor                # Use Trezor hardware wallet
+#   ./scripts/deploy-bridge.sh                               # Deploy with config from .env
+#   ./scripts/deploy-bridge.sh <url>                         # Override RPC
+#   DRY_RUN=true ./scripts/deploy-bridge.sh <url>            # Dry run / simulation
+#   ./scripts/deploy-bridge.sh <url> --keystore <path>       # Use a keystore
+#   ./scripts/deploy-bridge.sh <url> --private-key <key>     # Use a private key
+#   ./scripts/deploy-bridge.sh <url> --ledger                # Use Ledger hardware wallet
+#   ./scripts/deploy-bridge.sh <url> --trezor                # Use Trezor hardware wallet
 
 set -euo pipefail
 

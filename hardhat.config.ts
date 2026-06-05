@@ -1,4 +1,8 @@
 import 'dotenv/config'
+// NOTE: We import @nomicfoundation/hardhat-ethers (Ethers v6) here.
+// However, the project also retains @nomiclabs/hardhat-ethers and an ethers v5 override in package.json
+// because some downstream dependencies (specifically @layerzerolabs/toolbox-hardhat and hardhat-deploy)
+// still depend on Ethers v5 structures.
 import '@nomicfoundation/hardhat-ethers'
 import '@nomicfoundation/hardhat-foundry'
 import '@layerzerolabs/toolbox-hardhat'

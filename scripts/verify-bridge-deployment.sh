@@ -38,9 +38,9 @@ if [ -z "${1:-}" ]; then
 fi
 
 ENV="$1"
-if [ "$ENV" != "mainnet" ] && [ "$ENV" != "testnet" ]; then
+if [ "$ENV" != "mainnet" ] && [ "$ENV" != "testnet" ] && [ "$ENV" != "local" ]; then
     echo -e "${RED}${BOLD}❌ Error: Invalid environment '$ENV'${NC}"
-    echo -e "${YELLOW}Must be 'mainnet' or 'testnet'${NC}"
+    echo -e "${YELLOW}Must be 'mainnet' or 'testnet' or 'local'${NC}"
     exit 1
 fi
 
@@ -119,6 +119,10 @@ to_bytes32() {
   printf "0x%064s" "$stripped" | tr ' ' '0'
 }
 
+to_lowercase() {
+  echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 for i in "${!CHAINS[@]}"; do
     CHAIN_ID="${CHAINS[$i]}"
     CHAIN_NAME="${CHAIN_NAMES[$i]}"
@@ -127,34 +131,22 @@ for i in "${!CHAINS[@]}"; do
     echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${CYAN}${BOLD}🌐 Network: $CHAIN_NAME (Chain ID: $CHAIN_ID)${NC}"
     
-    # Determine RPC URL
-    RPC_VAR="RPC_URL_${CHAIN_ID}"
-    RPC_URL="${!RPC_VAR:-}"
+    # Determine RPC URL from .env
+    RPC_URL=""
+    if [ "$CHAIN_ID" == "8453" ]; then
+        RPC_URL="${BASE_RPC_URL:-}"
+    elif [ "$CHAIN_ID" == "56" ]; then
+        RPC_URL="${BSC_RPC_URL:-}"
+    elif [ "$CHAIN_ID" == "84532" ]; then
+        RPC_URL="${BASE_SEPOLIA_RPC_URL:-}"
+    elif [ "$CHAIN_ID" == "97" ]; then
+        RPC_URL="${BSC_TESTNET_RPC_URL:-}"
+    fi
+
+    # Fallback to RPC_URL_XXXX if defined
     if [ -z "$RPC_URL" ]; then
-        # Try legacy vars only if they align with the network
-        if [ "$CHAIN_ID" == "8453" ]; then
-            if [ -n "${BASE_RPC_URL:-}" ] && [[ "$BASE_RPC_URL" =~ (base|8453) ]] && [[ ! "$BASE_RPC_URL" =~ (sepolia|84532) ]]; then
-                RPC_URL="$BASE_RPC_URL"
-            fi
-        elif [ "$CHAIN_ID" == "84532" ]; then
-            if [ -n "${BASE_TESTNET_RPC_URL:-}" ]; then
-                RPC_URL="$BASE_TESTNET_RPC_URL"
-            elif [ -n "${BASE_RPC_URL:-}" ] && [[ "$BASE_RPC_URL" =~ (base|sepolia|8453) ]]; then
-                RPC_URL="$BASE_RPC_URL"
-            fi
-        elif [ "$CHAIN_ID" == "56" ]; then
-            if [ -n "${BSC_RPC_URL:-}" ]; then
-                RPC_URL="$BSC_RPC_URL"
-            elif [ -n "${BASE_RPC_URL:-}" ] && [[ "$BASE_RPC_URL" =~ (bsc|binance|56) ]]; then
-                RPC_URL="$BASE_RPC_URL"
-            fi
-        elif [ "$CHAIN_ID" == "97" ]; then
-            if [ -n "${BSC_TESTNET_RPC_URL:-}" ]; then
-                RPC_URL="$BSC_TESTNET_RPC_URL"
-            elif [ -n "${BASE_RPC_URL:-}" ] && [[ "$BASE_RPC_URL" =~ (bsc|binance|chapel|97) ]]; then
-                RPC_URL="$BASE_RPC_URL"
-            fi
-        fi
+        RPC_VAR="RPC_URL_${CHAIN_ID}"
+        RPC_URL="${!RPC_VAR:-}"
     fi
     
     if [ -z "$RPC_URL" ]; then
@@ -169,7 +161,7 @@ for i in "${!CHAINS[@]}"; do
     EXPECTED_BRIDGE=$(read_manifest_val "networks.${CHAIN_ID}.expectedBridgeAddress")
     EXPECTED_ADMIN=$(read_manifest_val "networks.${CHAIN_ID}.targetAdmin")
     EXPECTED_ENDPOINT=$(read_manifest_val "networks.${CHAIN_ID}.lzEndpoint")
-    EXPECTED_EID=$(read_manifest_val "networks.${CHAIN_ID}.eid")
+    EXPECTED_EID=$(read_manifest_val "networks.${CHAIN_ID}.lzEid")
     
     echo -e "${CYAN}🌉 Deployed Bridge Address:${NC} ${MAGENTA}$EXPECTED_BRIDGE${NC}"
     
@@ -185,7 +177,7 @@ for i in "${!CHAINS[@]}"; do
     
     # 2. Verify token address configuration
     ACTUAL_TOKEN=$(cast call "$EXPECTED_BRIDGE" "token()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
-    if [ "${ACTUAL_TOKEN,,}" == "${EXPECTED_TOKEN,,}" ]; then
+    if [ "$(to_lowercase "$ACTUAL_TOKEN")" == "$(to_lowercase "$EXPECTED_TOKEN")" ]; then
         echo -e "   ${GREEN}✓${NC} Underlying Token matches manifest: ${MAGENTA}$ACTUAL_TOKEN${NC}"
     else
         echo -e "   ${RED}${BOLD}✗ Token mismatch! Found $ACTUAL_TOKEN, expected $EXPECTED_TOKEN${NC}"
@@ -194,7 +186,7 @@ for i in "${!CHAINS[@]}"; do
     
     # 3. Verify LayerZero endpoint address configuration
     ACTUAL_ENDPOINT=$(cast call "$EXPECTED_BRIDGE" "endpoint()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
-    if [ "${ACTUAL_ENDPOINT,,}" == "${EXPECTED_ENDPOINT,,}" ]; then
+    if [ "$(to_lowercase "$ACTUAL_ENDPOINT")" == "$(to_lowercase "$EXPECTED_ENDPOINT")" ]; then
         echo -e "   ${GREEN}✓${NC} LayerZero Endpoint matches manifest: ${MAGENTA}$ACTUAL_ENDPOINT${NC}"
     else
         echo -e "   ${RED}${BOLD}✗ Endpoint mismatch! Found $ACTUAL_ENDPOINT, expected $EXPECTED_ENDPOINT${NC}"
@@ -203,7 +195,7 @@ for i in "${!CHAINS[@]}"; do
     
     # 4. Verify owner / delegate configuration
     ACTUAL_OWNER=$(cast call "$EXPECTED_BRIDGE" "owner()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
-    if [ "${ACTUAL_OWNER,,}" == "${EXPECTED_ADMIN,,}" ]; then
+    if [ "$(to_lowercase "$ACTUAL_OWNER")" == "$(to_lowercase "$EXPECTED_ADMIN")" ]; then
         echo -e "   ${GREEN}✓${NC} Bridge Owner matches Gnosis Safe targetAdmin: ${MAGENTA}$ACTUAL_OWNER${NC}"
     else
         echo -e "   ${RED}${BOLD}✗ Owner mismatch! Found $ACTUAL_OWNER, expected Safe $EXPECTED_ADMIN${NC}"
@@ -213,7 +205,7 @@ for i in "${!CHAINS[@]}"; do
     # 5. Verify endpoint delegate
     if [ -n "$ACTUAL_ENDPOINT" ] && [ "$ACTUAL_ENDPOINT" != "0x0000000000000000000000000000000000000000" ]; then
         ACTUAL_DELEGATE=$(cast call "$ACTUAL_ENDPOINT" "delegates(address)(address)" "$EXPECTED_BRIDGE" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
-        if [ "${ACTUAL_DELEGATE,,}" == "${EXPECTED_ADMIN,,}" ]; then
+        if [ "$(to_lowercase "$ACTUAL_DELEGATE")" == "$(to_lowercase "$EXPECTED_ADMIN")" ]; then
             echo -e "   ${GREEN}✓${NC} Endpoint delegate matches Safe: ${MAGENTA}$ACTUAL_DELEGATE${NC}"
         else
             echo -e "   ${RED}${BOLD}✗ Endpoint delegate NOT set to Safe! Found $ACTUAL_DELEGATE, expected $EXPECTED_ADMIN${NC}"
@@ -226,13 +218,13 @@ for i in "${!CHAINS[@]}"; do
         if [ "$i" == "$j" ]; then continue; fi
         REMOTE_CHAIN_ID="${CHAINS[$j]}"
         REMOTE_NAME="${CHAIN_NAMES[$j]}"
-        REMOTE_EID=$(read_manifest_val "networks.${REMOTE_CHAIN_ID}.eid")
+        REMOTE_EID=$(read_manifest_val "networks.${REMOTE_CHAIN_ID}.lzEid")
         REMOTE_BRIDGE=$(read_manifest_val "networks.${REMOTE_CHAIN_ID}.expectedBridgeAddress")
         
         EXPECTED_PEER_BYTES32=$(to_bytes32 "$REMOTE_BRIDGE")
         ACTUAL_PEER_BYTES32=$(cast call "$EXPECTED_BRIDGE" "peers(uint32)(bytes32)" "$REMOTE_EID" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
         
-        if [ "${ACTUAL_PEER_BYTES32,,}" == "${EXPECTED_PEER_BYTES32,,}" ]; then
+        if [ "$(to_lowercase "$ACTUAL_PEER_BYTES32")" == "$(to_lowercase "$EXPECTED_PEER_BYTES32")" ]; then
             echo -e "   ${GREEN}✓${NC} Pathway wired to ${YELLOW}$REMOTE_NAME${NC} (EID: $REMOTE_EID) peer address: ${MAGENTA}$REMOTE_BRIDGE${NC}"
         else
             echo -e "   ${RED}${BOLD}✗ Pathway NOT configured to $REMOTE_NAME (EID: $REMOTE_EID)! Found $ACTUAL_PEER_BYTES32, expected $EXPECTED_PEER_BYTES32${NC}"

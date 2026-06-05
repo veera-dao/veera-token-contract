@@ -299,6 +299,26 @@ After deploying the contract, you can run comprehensive integration tests to ver
    npm test
    ```
 
+### 10.1 Live Integration Test Evidence (Base Sepolia ↔ BSC Testnet)
+Verification evidence from executing the cross-chain integration tests:
+
+* **Initial States**:
+  * **Base Sepolia**: 999,999,898 VEERA
+  * **BSC Testnet**: 2 VEERA
+
+* **Cycle 1 (Base Sepolia ➔ BSC Testnet)**:
+  * **Bridged Amount**: 1 VEERA
+  * **LayerZero Native Fee**: 0.000221488614313199 ETH
+  * **Transaction Hash**: [0xefdee8586c6f73604c0485e2ad9d7e635a6069e2d4347e0e599621383e338599](https://testnet.layerzeroscan.com/tx/0xefdee8586c6f73604c0485e2ad9d7e635a6069e2d4347e0e599621383e338599)
+  * **Post-delivery BSC Testnet Balance**: 3 VEERA
+
+* **Cycle 2 (BSC Testnet ➔ Base Sepolia)**:
+  * **Bridged Amount**: 1 VEERA
+  * **LayerZero Native Fee**: 0.000347596069246719 BNB
+  * **Transaction Hash**: [0xac72620bf2e2e54e38e6d56abc7b4c2ce5f1f581c2f95f0232838353357d2bcb](https://testnet.layerzeroscan.com/tx/0xac72620bf2e2e54e38e6d56abc7b4c2ce5f1f581c2f95f0232838353357d2bcb)
+  * **Post-delivery Base Sepolia Balance**: 999,999,898 VEERA
+
+
 ---
 
 ## 11. LayerZero Pathway Configuration & Wiring (Hardhat Suite)
