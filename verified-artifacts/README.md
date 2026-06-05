@@ -8,16 +8,19 @@ This folder contains pre-compiled contract artifacts that have been verified and
 
 ## Usage
 
-To deploy using these artifacts, set the `ARTIFACT_PATH` environment variable when running the deployment scripts:
+To deploy using these artifacts, set the `TOKEN_ARTIFACT_PATH` and `BRIDGE_ARTIFACT_PATH` environment variables when running the deployment scripts:
 
 ```bash
-# Mainnet Deployment
-ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy.sh
+# Mainnet Token Deployment
+TOKEN_ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy.sh
 
-# Testnet Deployment
-ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy-testnet.sh
+# Mainnet Bridge Adapter Deployment
+BRIDGE_ARTIFACT_PATH="verified-artifacts/VeeraMintBurnOFTAdapter.json" ./scripts/deploy-bridge.sh <rpc_url>
+
+# Testnet Token Deployment
+TOKEN_ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy-testnet.sh <rpc_url>
 ```
 
-The deployment script (`script/DeployVeera.s.sol`) will load the bytecode from this JSON file and dynamically append the constructor arguments defined in `deploy_manifest.json`. 
+The token deployment script (`script/DeployVeera.s.sol`) will load the bytecode from `TOKEN_ARTIFACT_PATH` and dynamically append the constructor arguments defined in the manifest. The bridge adapter deployment script (`script/DeployOFTAdapter.s.sol`) will load the bytecode from `BRIDGE_ARTIFACT_PATH`.
 
-**Note:** If the `Veera.sol` source code is ever modified, this artifact must be regenerated to reflect those changes. However, for production releases, this artifact should be treated as the immutable source of truth for the contract bytecode.
+**Note:** If the Solidity source code is ever modified, these artifacts must be regenerated. However, for production releases, they should be treated as the immutable source of truth for the contract bytecode.

@@ -138,11 +138,11 @@ Before broadcasting, ensure the following are configured in the active deploymen
 For production deployments, it is recommended to use a pre-compiled bytecode artifact to ensure that local compiler versions or dependency changes do not affect the deployed bytecode.
 
 1. Generate or locate the audited artifact (e.g., `verified-artifacts/Veera.json`).
-2. Deploy using the `ARTIFACT_PATH` environment variable:
+2. Deploy using the `TOKEN_ARTIFACT_PATH` environment variable:
 ```bash
-ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy.sh
+TOKEN_ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy.sh
 ```
-The script will load the bytecode from the JSON file and append the constructor arguments defined in `deploy_manifest.json` dynamically.
+The script will load the bytecode from the JSON file and append the constructor arguments defined in the manifest dynamically.
 
 ---
 ## 5. Deployment Management & Security Lifecycle

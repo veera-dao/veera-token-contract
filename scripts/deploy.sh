@@ -10,7 +10,7 @@
 #   ./scripts/deploy.sh                        # Uses defaults from .env
 #   RPC_URL=<url> ./scripts/deploy.sh          # Override RPC
 #   DRY_RUN=true ./scripts/deploy.sh           # Simulate without broadcasting
-#   ARTIFACT_PATH=<path> ./scripts/deploy.sh   # Use pre-compiled bytecode (e.g. out/Veera.sol/Veera.json)
+#   TOKEN_ARTIFACT_PATH=<path> ./scripts/deploy.sh   # Use pre-compiled bytecode (e.g. out/Veera.sol/Veera.json)
 
 set -euo pipefail
 

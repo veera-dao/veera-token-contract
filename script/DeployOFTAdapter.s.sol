@@ -94,8 +94,18 @@ contract DeployOFTAdapter is Script {
         }
 
         // 3. Compute and validate predicted CREATE2 address
+        bytes memory bytecode;
+        string memory artifactPath = vm.envOr("BRIDGE_ARTIFACT_PATH", string(""));
+
+        if (bytes(artifactPath).length > 0) {
+            bytecode = vm.getCode(artifactPath);
+            console.log("Using pre-compiled bytecode from:", artifactPath);
+        } else {
+            bytecode = type(VeeraMintBurnOFTAdapter).creationCode;
+        }
+
         bytes memory creationCode = abi.encodePacked(
-            type(VeeraMintBurnOFTAdapter).creationCode,
+            bytecode,
             abi.encode(manifest.expectedTokenAddress, manifest.lzEndpoint, manifest.targetAdmin)
         );
         bytes32 initCodeHash = keccak256(creationCode);

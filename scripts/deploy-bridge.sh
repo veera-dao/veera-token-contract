@@ -7,6 +7,7 @@
 #   ./scripts/deploy-bridge.sh                               # Deploy with config from .env
 #   ./scripts/deploy-bridge.sh <url>                         # Override RPC
 #   DRY_RUN=true ./scripts/deploy-bridge.sh <url>            # Dry run / simulation
+#   BRIDGE_ARTIFACT_PATH=<path> ./scripts/deploy-bridge.sh   # Use pre-compiled bytecode (e.g. verified-artifacts/VeeraMintBurnOFTAdapter.json)
 #   ./scripts/deploy-bridge.sh <url> --keystore <path>       # Use a keystore
 #   ./scripts/deploy-bridge.sh <url> --private-key <key>     # Use a private key
 #   ./scripts/deploy-bridge.sh <url> --ledger                # Use Ledger hardware wallet

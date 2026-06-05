@@ -14,7 +14,7 @@
 #   ./scripts/deploy-testnet.sh path/to/keystore             # Custom keystore
 #   ./scripts/deploy-testnet.sh path/to/keystore --verify    # With contract verification
 #   DRY_RUN=true ./scripts/deploy-testnet.sh                 # Simulate without broadcasting
-#   ARTIFACT_PATH=<path> ./scripts/deploy-testnet.sh         # Use pre-compiled bytecode
+#   TOKEN_ARTIFACT_PATH=<path> ./scripts/deploy-testnet.sh         # Use pre-compiled bytecode
 
 set -euo pipefail
 

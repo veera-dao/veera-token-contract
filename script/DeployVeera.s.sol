@@ -74,7 +74,7 @@ contract DeployVeera is Script {
 
         // 3. Compute and validate predicted CREATE2 address
         bytes memory bytecode;
-        string memory artifactPath = vm.envOr("ARTIFACT_PATH", string(""));
+        string memory artifactPath = vm.envOr("TOKEN_ARTIFACT_PATH", string(""));
 
         if (bytes(artifactPath).length > 0) {
             bytecode = vm.getCode(artifactPath);
