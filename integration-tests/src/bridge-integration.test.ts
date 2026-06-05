@@ -141,6 +141,32 @@ async function main() {
 
   console.log(chalk.green('✓ Clients initialized successfully!\n'));
 
+  // Pre-test cleanup: Ensure adapters are unpaused
+  const adminKey = process.env.TESTING_BRIDGE_ADMIN_PRIVATE_KEY;
+  if (adminKey) {
+    try {
+      const adminAcc = privateKeyToAccount(adminKey.startsWith('0x') ? adminKey as Hex : `0x${adminKey}` as Hex);
+      const baseAdminWallet = createWalletClient({ account: adminAcc, chain: baseSepolia, transport: http(baseRpcUrl) });
+      const bscAdminWallet = createWalletClient({ account: adminAcc, chain: bscTestnet, transport: http(bscRpcUrl) });
+
+      const basePaused = await readContract(basePublic, BASE_BRIDGE, ADAPTER_ABI, 'paused');
+      if (basePaused) {
+        console.log(chalk.yellow('  ⚠️  Base Bridge is currently paused. Unpausing for test run...'));
+        await writeContract(baseAdminWallet, basePublic, BASE_BRIDGE, ADAPTER_ABI, 'unpause');
+        console.log(chalk.green('  ✓ Base Bridge unpaused.'));
+      }
+
+      const bscPaused = await readContract(bscPublic, BSC_BRIDGE, ADAPTER_ABI, 'paused');
+      if (bscPaused) {
+        console.log(chalk.yellow('  ⚠️  BSC Bridge is currently paused. Unpausing for test run...'));
+        await writeContract(bscAdminWallet, bscPublic, BSC_BRIDGE, ADAPTER_ABI, 'unpause');
+        console.log(chalk.green('  ✓ BSC Bridge unpaused.'));
+      }
+    } catch (e: any) {
+      console.log(chalk.yellow(`  ⚠️  Failed to check/unpause adapters during initialization: ${e.message}`));
+    }
+  }
+
   // 1. Check native balances
   const baseEthBalance = await basePublic.getBalance({ address: userAddress });
   const bscBnbBalance = await bscPublic.getBalance({ address: userAddress });
@@ -372,7 +398,7 @@ async function runFailureAndEdgeCaseTests(
     // Intentionally pass only half of the native fee
     const halfFee = nativeFee / 2n;
     console.log(`  - Quoted fee: ${formatEther(nativeFee)} ETH. Sending with: ${formatEther(halfFee)} ETH...`);
-    
+
     // Call send with underfunded fee
     await baseWallet.writeContract({
       address: BASE_BRIDGE,
@@ -412,7 +438,7 @@ async function runFailureAndEdgeCaseTests(
     const tempAccount = privateKeyToAccount(tempPrivateKey);
     const tempWallet = createWalletClient({ account: tempAccount, chain: baseSepolia, transport: http(baseRpcUrl) });
     console.log(`  - Attempting to send from zero-gas account: ${tempAccount.address}...`);
-    
+
     await tempWallet.writeContract({
       address: TOKEN_ADDRESS,
       abi: VEERA_ABI,
@@ -437,7 +463,7 @@ async function runFailureAndEdgeCaseTests(
   try {
     const { nativeFee } = await readContract(basePublic, BASE_BRIDGE, ADAPTER_ABI, 'quoteSend', [sendParamExcessive, false]);
     console.log(`  - Attempting to bridge ${formatEther(excessiveAmount)} VEERA (exceeds balance)...`);
-    
+
     await baseWallet.writeContract({
       address: BASE_BRIDGE,
       abi: ADAPTER_ABI,
@@ -456,10 +482,10 @@ async function runFailureAndEdgeCaseTests(
   try {
     console.log('  - Clearing bridge allowance to 0...');
     await writeContract(baseWallet, basePublic, TOKEN_ADDRESS, VEERA_ABI, 'approve', [BASE_BRIDGE, 0n]);
-    
+
     const { nativeFee } = await readContract(basePublic, BASE_BRIDGE, ADAPTER_ABI, 'quoteSend', [sendParamBase, false]);
     console.log('  - Attempting to bridge 1 VEERA without allowance...');
-    
+
     await baseWallet.writeContract({
       address: BASE_BRIDGE,
       abi: ADAPTER_ABI,
@@ -525,16 +551,24 @@ async function runFailureAndEdgeCaseTests(
     try {
       const adminAcc = privateKeyToAccount(adminKey.startsWith('0x') ? adminKey as Hex : `0x${adminKey}` as Hex);
       console.log(`  - Loaded Admin Signer Account: ${adminAcc.address}`);
-      
+
       const baseAdminWallet = createWalletClient({ account: adminAcc, chain: baseSepolia, transport: http(baseRpcUrl) });
-      const bscAdminWallet = createWalletClient({ account: adminAcc, chain: bscTestnet, transport: http(bscRpcUrl) });
-      
+
+      const isPausedInitially = await readContract(basePublic, BASE_BRIDGE, ADAPTER_ABI, 'paused');
+      if (isPausedInitially) {
+        console.log('  - Adapter was paused initially. Unpausing first...');
+        await writeContract(baseAdminWallet, basePublic, BASE_BRIDGE, ADAPTER_ABI, 'unpause');
+        console.log(chalk.green('  ✓ Base Bridge Adapter unpaused.'));
+      }
+
+      console.log('  - Verifying send reverts while paused...');
+      // Query quoteSend fee BEFORE pausing, since quoteSend reverts when paused
+      const { nativeFee } = await readContract(basePublic, BASE_BRIDGE, ADAPTER_ABI, 'quoteSend', [sendParamBase, false]);
+
       console.log('  - Pausing Base Bridge Adapter...');
       await writeContract(baseAdminWallet, basePublic, BASE_BRIDGE, ADAPTER_ABI, 'pause');
       console.log(chalk.green('  ✓ Base Bridge Adapter paused.'));
-      
-      console.log('  - Verifying send reverts while paused...');
-      const { nativeFee } = await readContract(basePublic, BASE_BRIDGE, ADAPTER_ABI, 'quoteSend', [sendParamBase, false]);
+
       try {
         await baseWallet.writeContract({
           address: BASE_BRIDGE,
@@ -548,7 +582,7 @@ async function runFailureAndEdgeCaseTests(
       } catch (error: any) {
         console.log(chalk.green(`    ✓ Successfully blocked send: ${error.message.split('\n')[0]}`));
       }
-      
+
       console.log('  - Unpausing Base Bridge Adapter...');
       await writeContract(baseAdminWallet, basePublic, BASE_BRIDGE, ADAPTER_ABI, 'unpause');
       console.log(chalk.green('  ✓ Base Bridge Adapter unpaused.'));
