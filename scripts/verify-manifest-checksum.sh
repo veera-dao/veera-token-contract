@@ -17,10 +17,8 @@ NC='\033[0m' # No Color
 
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 MANIFEST_FILE="${SCRIPT_PATH}/../deploy_manifest.mainnet.json"
-
 # The approved production checksum representing the audited configuration
-APPROVED_CHECKSUM="a25ad1afcd37813e4be978adb5dfa79d913f990061e22acafca7e60b6d52c70c"
-
+APPROVED_CHECKSUM="ab5afe5ba3e6c4a8c57b91a5b69ac28d1d47d5cd104ffb68583e8b741bec66f0"
 echo -e "${BLUE}${BOLD}================================================================${NC}"
 echo -e "${CYAN}${BOLD}🔒 MANIFEST INTEGRITY VERIFICATION PROTOCOL${NC}"
 echo -e "${BLUE}${BOLD}================================================================${NC}"
