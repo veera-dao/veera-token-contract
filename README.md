@@ -77,7 +77,7 @@ To achieve identical contract addresses across multiple EVM chains (e.g., Base a
 
 ### Deterministic Target Address
 
-When the above parameters are compiled with Solidity **0.8.24** (using Cancun EVM, optimization enabled at 200 runs), the resulting deterministic CREATE2 contract address is:
+When the above parameters are compiled with Solidity **0.8.28** (using Cancun EVM, optimization enabled at 200 runs), the resulting deterministic CREATE2 contract address is:
 
 $$\mathbf{0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532}$$
 
@@ -168,7 +168,7 @@ To guarantee manifest integrity and prevent unauthorized changes, the codebase i
 
 
 ### Predicted Addresses Per Chain
-With optimization enabled (Solidity 0.8.24, Cancun, 200 runs) and the standard Arachnid CREATE2 factory, the predicted token address is:
+With optimization enabled (Solidity 0.8.28, Cancun, 200 runs) and the standard Arachnid CREATE2 factory, the predicted token address is:
 * **All Networks (Base & BSC Mainnet/Testnet):** `0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532`
 * **Local Anvil (Chain ID 31337):** Matches the above address if the default parameters are used, but can be set to `address(0)` in the manifest for local development/testing.
 
