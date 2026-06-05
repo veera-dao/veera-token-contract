@@ -2,11 +2,13 @@
 pragma solidity ^0.8.24;
 
 import {Test, console} from "forge-std/Test.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 import {DeployVeera} from "../script/DeployVeera.s.sol";
 import {HelperConfig} from "../script/HelperConfig.s.sol";
 import {Veera} from "../src/Veera.sol";
 
 contract DeployVeeraTest is Test {
+    using stdJson for string;
     DeployVeera public deployer;
 
     // NOTE: These addresses must match the manifest.
@@ -28,6 +30,47 @@ contract DeployVeeraTest is Test {
         );
     }
 
+    function loadManifestConfig(string memory manifestFile, uint256 chainId)
+        internal
+        view
+        returns (HelperConfig.ManifestConfig memory manifest)
+    {
+        string memory path = string.concat(vm.projectRoot(), "/", manifestFile);
+        string memory json = vm.readFile(path);
+
+        manifest.salt = json.readBytes32(".salt");
+        manifest.factory = json.readAddress(".factory");
+        manifest.factoryCodeHash = json.readBytes32(".factoryCodeHash");
+        manifest.bootstrapAdmin = json.readAddress(".bootstrapAdmin");
+        manifest.name = json.readString(".name");
+        manifest.symbol = json.readString(".symbol");
+        manifest.constructorSupply = vm.parseUint(json.readString(".constructorSupply"));
+        manifest.maxSupply = vm.parseUint(json.readString(".maxSupply"));
+        manifest.expectedTokenAddress = json.readAddress(".expectedTokenAddress");
+
+        string memory networkKey = string.concat(".networks.", vm.toString(chainId));
+        manifest.rpcIdentifier = json.readString(string.concat(networkKey, ".rpcIdentifier"));
+        manifest.targetAdmin = json.readAddress(string.concat(networkKey, ".targetAdmin"));
+        manifest.initialMintRecipient = json.readAddress(string.concat(networkKey, ".initialMintRecipient"));
+        manifest.expectedPostDeploymentSupply =
+            vm.parseUint(json.readString(string.concat(networkKey, ".expectedPostDeploymentSupply")));
+
+        string memory lzEndpointKey = string.concat(networkKey, ".lzEndpoint");
+        if (vm.keyExistsJson(json, lzEndpointKey)) {
+            manifest.lzEndpoint = json.readAddress(lzEndpointKey);
+        }
+
+        string memory eidKey = string.concat(networkKey, ".lzEid");
+        if (vm.keyExistsJson(json, eidKey)) {
+            manifest.eid = uint32(vm.parseUint(json.readString(eidKey)));
+        }
+
+        string memory expectedBridgeKey = string.concat(networkKey, ".expectedBridgeAddress");
+        if (vm.keyExistsJson(json, expectedBridgeKey)) {
+            manifest.expectedBridgeAddress = json.readAddress(expectedBridgeKey);
+        }
+    }
+
     function tryLoadConfig() internal returns (HelperConfig config) {
         try new HelperConfig() returns (HelperConfig _config) {
             return _config;
@@ -45,11 +88,8 @@ contract DeployVeeraTest is Test {
     }
 
     // Helper to calculate predicted address from config on different chains
-    function getPredictedAddressForChain(uint256 chainId) public returns (address) {
-        vm.chainId(chainId);
-        HelperConfig config = tryLoadConfig();
-        if (address(config) == address(0)) return address(0);
-        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+    function getPredictedAddressForChain(string memory manifestFile, uint256 chainId) public returns (address) {
+        HelperConfig.ManifestConfig memory manifest = loadManifestConfig(manifestFile, chainId);
 
         bytes memory bytecode;
         string memory artifactPath = vm.envOr("ARTIFACT_PATH", string(""));
@@ -71,8 +111,8 @@ contract DeployVeeraTest is Test {
 
     // 1. Base mainnet predicted address == BSC mainnet predicted address
     function test_predictedAddressMatchesAcrossMainnets() public {
-        address basePredicted = getPredictedAddressForChain(8453);
-        address bscPredicted = getPredictedAddressForChain(56);
+        address basePredicted = getPredictedAddressForChain("deploy_manifest.mainnet.json", 8453);
+        address bscPredicted = getPredictedAddressForChain("deploy_manifest.mainnet.json", 56);
         if (basePredicted == address(0) || bscPredicted == address(0)) return;
 
         console.log("Base Mainnet Predicted Address: ", basePredicted);
@@ -83,8 +123,8 @@ contract DeployVeeraTest is Test {
 
     // 2. Base Sepolia predicted address == BSC testnet predicted address
     function test_predictedAddressMatchesAcrossTestnets() public {
-        address baseSepoliaPredicted = getPredictedAddressForChain(84532);
-        address bscTestnetPredicted = getPredictedAddressForChain(97);
+        address baseSepoliaPredicted = getPredictedAddressForChain("deploy_manifest.testnet.json", 84532);
+        address bscTestnetPredicted = getPredictedAddressForChain("deploy_manifest.testnet.json", 97);
         if (baseSepoliaPredicted == address(0) || bscTestnetPredicted == address(0)) return;
 
         console.log("Base Sepolia Predicted Address: ", baseSepoliaPredicted);
@@ -95,14 +135,11 @@ contract DeployVeeraTest is Test {
 
     // 3. Predicted address matches expected token address
     function test_predictedAddressMatchesManifest() public {
-        vm.chainId(8453);
-        HelperConfig config = tryLoadConfig();
-        if (address(config) == address(0)) return;
-        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+        HelperConfig.ManifestConfig memory manifest = loadManifestConfig("deploy_manifest.mainnet.json", 8453);
 
         // Skip check if manifest expectedAddress is still address(0) placeholder
         if (manifest.expectedTokenAddress != address(0)) {
-            address predicted = getPredictedAddressForChain(8453);
+            address predicted = getPredictedAddressForChain("deploy_manifest.mainnet.json", 8453);
             assertEq(
                 predicted,
                 manifest.expectedTokenAddress,
@@ -113,13 +150,10 @@ contract DeployVeeraTest is Test {
 
     // 4. Changing bootstrap admin changes predicted address
     function test_changingBootstrapAdminChangesAddress() public {
-        address predictedWithAdmin = getPredictedAddressForChain(8453);
+        address predictedWithAdmin = getPredictedAddressForChain("deploy_manifest.mainnet.json", 8453);
         if (predictedWithAdmin == address(0)) return;
 
-        // Modify constructor arguments with different bootstrap admin
-        HelperConfig config = tryLoadConfig();
-        if (address(config) == address(0)) return;
-        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+        HelperConfig.ManifestConfig memory manifest = loadManifestConfig("deploy_manifest.mainnet.json", 8453);
 
         bytes memory creationCode = abi.encodePacked(
             type(Veera).creationCode,
@@ -133,13 +167,10 @@ contract DeployVeeraTest is Test {
 
     // 5. Changing constructor initial supply changes predicted address
     function test_changingInitialSupplyChangesAddress() public {
-        address predictedWithZeroSupply = getPredictedAddressForChain(8453);
+        address predictedWithZeroSupply = getPredictedAddressForChain("deploy_manifest.mainnet.json", 8453);
         if (predictedWithZeroSupply == address(0)) return;
 
-        // Modify constructor arguments with non-zero initial supply
-        HelperConfig config = tryLoadConfig();
-        if (address(config) == address(0)) return;
-        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+        HelperConfig.ManifestConfig memory manifest = loadManifestConfig("deploy_manifest.mainnet.json", 8453);
 
         bytes memory creationCode = abi.encodePacked(
             type(Veera).creationCode,
@@ -153,12 +184,10 @@ contract DeployVeeraTest is Test {
 
     // 6. Changing salt changes predicted address
     function test_changingSaltChangesAddress() public {
-        address predictedWithSalt = getPredictedAddressForChain(8453);
+        address predictedWithSalt = getPredictedAddressForChain("deploy_manifest.mainnet.json", 8453);
         if (predictedWithSalt == address(0)) return;
 
-        HelperConfig config = tryLoadConfig();
-        if (address(config) == address(0)) return;
-        HelperConfig.ManifestConfig memory manifest = config.getManifestConfig();
+        HelperConfig.ManifestConfig memory manifest = loadManifestConfig("deploy_manifest.mainnet.json", 8453);
 
         bytes memory creationCode = abi.encodePacked(
             type(Veera).creationCode,
@@ -232,7 +261,7 @@ contract DeployVeeraTest is Test {
     // 12. Deployed address matches predicted address on Base Mainnet
     function test_deployedAddressMatchesPredicted_BaseMainnet() public {
         vm.chainId(8453); // Base Mainnet
-        address predicted = getPredictedAddressForChain(8453);
+        address predicted = getPredictedAddressForChain("deploy_manifest.mainnet.json", 8453);
         if (predicted == address(0)) return;
 
         (Veera token, HelperConfig config) = tryRunDeployer();
@@ -244,7 +273,7 @@ contract DeployVeeraTest is Test {
     // 13. Deployed address matches predicted address on BSC Mainnet
     function test_deployedAddressMatchesPredicted_BscMainnet() public {
         vm.chainId(56); // BSC Mainnet
-        address predicted = getPredictedAddressForChain(56);
+        address predicted = getPredictedAddressForChain("deploy_manifest.mainnet.json", 56);
         if (predicted == address(0)) return;
 
         (Veera token, HelperConfig config) = tryRunDeployer();

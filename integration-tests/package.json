@@ -6,6 +6,8 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "tsx src/index.ts",
+    "test:bridge": "tsx src/bridge-integration.test.ts",
+    "test:bridge:failures": "SKIP_BASE_TESTS=true tsx src/bridge-integration.test.ts",
     "preflight": "tsx src/preflight-only.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
