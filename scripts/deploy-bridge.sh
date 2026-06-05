@@ -24,7 +24,7 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-RPC_URL="${$1}"
+RPC_URL="$1"
 if [ -z "$RPC_URL" ]; then
     echo "❌ Error: RPC_URL is required"
     exit 1
