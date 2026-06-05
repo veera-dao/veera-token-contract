@@ -8,7 +8,7 @@
   "constructorSupply": "0",
   "maxSupply": "1000000000000000000000000000",
   "expectedTokenAddress": "0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532",
-  "compilerVersion": "0.8.24",
+  "compilerVersion": "0.8.28",
   "optimizer": true,
   "optimizerRuns": 200,
   "evmVersion": "cancun",
@@ -21,7 +21,7 @@
       "expectedPostDeploymentSupply": "1000000000000000000000000000",
       "lzEndpoint": "0x6EDCE65403992e310A62460808c4b910D972f10f",
       "lzEid": "40245",
-      "expectedBridgeAddress": "0x4c46FA77db480A364C77dd3E870E7e9fcE87642f",
+      "expectedBridgeAddress": "0x1873A6e7534999d6C6bB1372D582Fc7b3384bAbE",
       "lzConfirmations": 1,
       "lzReceiveGas": 200000,
       "lzRequiredDVNs": [
@@ -35,7 +35,7 @@
       "expectedPostDeploymentSupply": "0",
       "lzEndpoint": "0x6EDCE65403992e310A62460808c4b910D972f10f",
       "lzEid": "40102",
-      "expectedBridgeAddress": "0x782FDcecca40179142D68Dcd73A3a4682E69DaCa",
+      "expectedBridgeAddress": "0xAed37766Ec8238587d4F2e3f2d993F85D1D1c0d1",
       "lzConfirmations": 1,
       "lzReceiveGas": 200000,
       "lzRequiredDVNs": [
