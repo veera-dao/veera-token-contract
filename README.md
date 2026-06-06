@@ -35,6 +35,25 @@ We use OpenZeppelin `AccessControl` instead of `Ownable` to prevent "vendor lock
 | **MINTER_ROLE** | **Bridge Adapter** | Granted to bridge contracts (like LayerZero OFT adapters) to handle minting when bridging. |
 | **PAUSER_ROLE** | **Multisig / Guard** | Can pause/unpause all token transfers. |
 
+### LayerZero V2 Bridging (MintBurnOFTAdapter)
+
+The cross-chain bridging is powered by LayerZero V2 using a custom [VeeraMintBurnOFTAdapter](src/bridge/VeeraMintBurnOFTAdapter.sol).
+
+* **Mechanism**: Rather than locking tokens in an escrow vault (Lock-and-Unlock pattern), the adapter utilizes a **Burn-and-Mint** pattern. When a user sends tokens to another chain, the adapter burns them directly from the user's wallet via `burnFrom`. On the destination chain, the corresponding adapter mints them back to the user via `mint`. This maintains a clean, uniform global supply without custodial honeypots.
+* **Access Control**: The adapter **must** receive `MINTER_ROLE` (and only this adapter) on the local [Veera](src/Veera.sol) token contract to allow it to mint tokens on credit (bridge in) without any other entity having mint authority.
+* **User Approval**: Users **must approve** this adapter address on the `Veera` token contract before calling the LayerZero `send` function.
+* **Peer Configuration**: It is recommended to use LayerZero's official `lz` CLI or Hardhat/devtools configuration tasks for peer wiring.
+* **Operational Phases**:
+  1. **Deployment**: Deploying the bridge adapter contract using `DeployOFTAdapter.s.sol`.
+  2. **Configuration**: Wire the peers by calling `setPeer` on the adapter (using `ConfigureOFTAdapter.s.sol`).
+  3. **Activation**: Granting `MINTER_ROLE` to the adapter address on the token contract (via Gnosis Safe).
+  *Note: These are strictly separate lifecycle phases handled by distinct tasks/transactions.*
+* **Deterministic Bridge Address Invariant**:
+  The bridge adapter address will only match across chains when token address, LayerZero endpoint, targetAdmin, salt, factory, bytecode, and compiler settings all match. Since LayerZero endpoints are network-specific, predicted bridge adapter addresses will typically differ across mainnets and testnets depending on these variables.
+* **Limitations & Safety Guidelines**:
+  * **Single Adapter per Chain**: Only one `OFTAdapter` should be deployed per chain for this token. Multiple adapters break unified liquidity and can lead to permanent token loss on destination chains.
+  * **Fee-on-Transfer**: Fee-on-transfer / rebasing tokens are **not supported** by this adapter.
+
 ---
 
 ## 2. Deterministic CREATE2 Deployment Workflow
@@ -58,7 +77,7 @@ To achieve identical contract addresses across multiple EVM chains (e.g., Base a
 
 ### Deterministic Target Address
 
-When the above parameters are compiled with Solidity **0.8.24** (using Cancun EVM, optimization enabled at 200 runs), the resulting deterministic CREATE2 contract address is:
+When the above parameters are compiled with Solidity **0.8.28** (using Cancun EVM, optimization enabled at 200 runs), the resulting deterministic CREATE2 contract address is:
 
 $$\mathbf{0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532}$$
 
@@ -79,7 +98,7 @@ To prevent this:
 
 ## 4. Deployment Script Execution
 
-The deployment is managed by `DeployVeera.s.sol`, which leverages `HelperConfig.s.sol` to parse `deploy_manifest.json` for chain-specific parameters.
+The deployment is managed by `DeployVeera.s.sol`, which leverages `HelperConfig.s.sol` to parse the manifest specified by the `DEPLOY_MANIFEST_PATH` environment variable (e.g. `deploy_manifest.testnet.json` or `deploy_manifest.mainnet.json`) for chain-specific parameters.
 
 ### Step-by-Step Execution Flow
 
@@ -110,7 +129,7 @@ graph TD
 
 ### Pre-Deployment Checklist
 
-Before broadcasting, ensure the following are configured in `deploy_manifest.json` under the specific target chain ID:
+Before broadcasting, ensure the following are configured in the active deployment manifest under the specific target chain ID:
 - `targetAdmin`: Recipient of the default admin role. Must be a deployed Gnosis Safe contract address.
 - `initialMintRecipient`: Recipient of the initial supply (home chain only).
 - `expectedPostDeploymentSupply`: Total supply expected post-execution (1B on Base, 0 on BSC).
@@ -119,23 +138,37 @@ Before broadcasting, ensure the following are configured in `deploy_manifest.jso
 For production deployments, it is recommended to use a pre-compiled bytecode artifact to ensure that local compiler versions or dependency changes do not affect the deployed bytecode.
 
 1. Generate or locate the audited artifact (e.g., `verified-artifacts/Veera.json`).
-2. Deploy using the `ARTIFACT_PATH` environment variable:
+2. Deploy using the `TOKEN_ARTIFACT_PATH` environment variable:
 ```bash
-ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy.sh
+TOKEN_ARTIFACT_PATH="verified-artifacts/Veera.json" ./scripts/deploy.sh
 ```
-The script will load the bytecode from the JSON file and append the constructor arguments defined in `deploy_manifest.json` dynamically.
+The script will load the bytecode from the JSON file and append the constructor arguments defined in the manifest dynamically.
 
 ---
 ## 5. Deployment Management & Security Lifecycle
 
 ### Manifest File Maintenance
-The JSON configuration file `deploy_manifest.json` acts as the single source of truth for the deployment. Proposing modifications to any global parameters (like `salt` or `bootstrapAdmin`) or changing network configurations must be done with caution.
+The JSON configuration files `deploy_manifest.mainnet.json` and `deploy_manifest.testnet.json` act as the single source of truth for deployments. Proposing modifications to any global parameters (like `salt` or `bootstrapAdmin`) or changing network configurations must be done with caution.
+
 To guarantee manifest integrity and prevent unauthorized changes, the codebase implements two verification steps:
-1. **Solidity Code Integrity Hash:** The script `DeployVeera.s.sol` calculates the `keccak256` hash of the parsed global deterministic parameters and asserts that it matches `EXPECTED_MANIFEST_INTEGRITY_HASH`. Proposing a manifest change will require updating this code hash in `DeployVeera.s.sol`.
-2. **SHA-256 Checksum Validation:** The utility script `scripts/verify-manifest-checksum.sh` computes the SHA-256 hash of `deploy_manifest.json` and compares it against the approved checksum (`5b134cc4bf299289e9ab9bc6ae7c356faa1e3e29807f00d54811343e5b3c2435`).
+1. **Solidity Code Integrity Hash:** The script `DeployVeera.s.sol` calculates the `keccak256` hash of the parsed global deterministic parameters and asserts that it matches `EXPECTED_MANIFEST_INTEGRITY_HASH`. Proposing a global parameter manifest change requires updating this code hash in `DeployVeera.s.sol`.
+2. **SHA-256 Checksum Validation:** The utility script [verify-manifest-checksum.sh](scripts/verify-manifest-checksum.sh) computes the SHA-256 hash of `deploy_manifest.mainnet.json` and compares it against the approved checksum defined directly in the script.
+
+> [!IMPORTANT]
+> **Updating the Checksum Script:**
+> When the mainnet manifest `deploy_manifest.mainnet.json` is intentionally changed, the checksum validation will fail. To update the approved checksum:
+> 1. Run the verification script:
+>    ```bash
+>    ./scripts/verify-manifest-checksum.sh
+>    ```
+>    This will compute and display the updated checksum.
+> 2. Copy the new checksum from the terminal output.
+> 3. Open [verify-manifest-checksum.sh](scripts/verify-manifest-checksum.sh) and update the `APPROVED_CHECKSUM` variable with the copied value.
+> 4. Re-run `./scripts/verify-manifest-checksum.sh` to ensure the check passes.
+
 
 ### Predicted Addresses Per Chain
-With optimization enabled (Solidity 0.8.24, Cancun, 200 runs) and the standard Arachnid CREATE2 factory, the predicted token address is:
+With optimization enabled (Solidity 0.8.28, Cancun, 200 runs) and the standard Arachnid CREATE2 factory, the predicted token address is:
 * **All Networks (Base & BSC Mainnet/Testnet):** `0x6e398a93eAcc13CBCb3e9a7c7a0B73821220E532`
 * **Local Anvil (Chain ID 31337):** Matches the above address if the default parameters are used, but can be set to `address(0)` in the manifest for local development/testing.
 
@@ -265,3 +298,74 @@ After deploying the contract, you can run comprehensive integration tests to ver
    ```bash
    npm test
    ```
+
+### 10.1 Live Integration Test Evidence (Base Sepolia ↔ BSC Testnet)
+Verification evidence from executing the cross-chain integration tests:
+
+* **Initial States**:
+  * **Base Sepolia**: 999,999,898 VEERA
+  * **BSC Testnet**: 2 VEERA
+
+* **Cycle 1 (Base Sepolia ➔ BSC Testnet)**:
+  * **Bridged Amount**: 1 VEERA
+  * **LayerZero Native Fee**: 0.000221488614313199 ETH
+  * **Transaction Hash**: [0xefdee8586c6f73604c0485e2ad9d7e635a6069e2d4347e0e599621383e338599](https://testnet.layerzeroscan.com/tx/0xefdee8586c6f73604c0485e2ad9d7e635a6069e2d4347e0e599621383e338599)
+  * **Post-delivery BSC Testnet Balance**: 3 VEERA
+
+* **Cycle 2 (BSC Testnet ➔ Base Sepolia)**:
+  * **Bridged Amount**: 1 VEERA
+  * **LayerZero Native Fee**: 0.000347596069246719 BNB
+  * **Transaction Hash**: [0xac72620bf2e2e54e38e6d56abc7b4c2ce5f1f581c2f95f0232838353357d2bcb](https://testnet.layerzeroscan.com/tx/0xac72620bf2e2e54e38e6d56abc7b4c2ce5f1f581c2f95f0232838353357d2bcb)
+  * **Post-delivery Base Sepolia Balance**: 999,999,898 VEERA
+
+
+---
+
+## 11. LayerZero Pathway Configuration & Wiring (Hardhat Suite)
+
+While Foundry is used for compiling, testing, and deterministic CREATE2 contract deployments, LayerZero V2 configurations (such as peer wiring, pathway verification, send/receive library settings, enforced option parameters, and DVN settings) are managed via Hardhat using LayerZero’s official devtools (`@layerzerolabs/toolbox-hardhat`).
+
+### 11.1 Single Source of Truth Address Invariant
+To prevent configuration drift, all contract addresses are resolved dynamically on-the-fly from the deployment manifest specified by the `DEPLOY_MANIFEST_PATH` environment variable (e.g. [deploy_manifest.mainnet.json](deploy_manifest.mainnet.json)). We **never** hardcode deployed contract addresses across different configuration files.
+
+### 11.2 Operational Scripts
+The root `package.json` contains pre-configured scripts for pathway wiring and diagnostics.
+
+| Action | Testnet (Base Sepolia ↔ BSC Testnet) | Mainnet (Base ↔ BSC) |
+| :--- | :--- | :--- |
+| **Configure Wiring & Peers** | `npm run lz:wire:testnet` | `npm run lz:wire:mainnet` |
+| **Read Back Peers** | `npm run lz:peers:testnet` | `npm run lz:peers:mainnet` |
+| **Read Back Config & DVNs** | `npm run lz:config:testnet` | `npm run lz:config:mainnet` |
+
+### 11.3 Gnosis Safe Multisig Wiring Workflow
+Because the `VeeraMintBurnOFTAdapter` contracts on Mainnet are owned by the Gnosis Safe multisig `targetAdmin` contract, wiring configuration transactions cannot be signed by a standard EOA private key. 
+
+To wire pathways for Gnosis Safe-owned contracts:
+1. Ensure your `.env` does not contain a `LZ_CONFIG_PRIVATE_KEY` (or leave it unset/empty).
+2. Execute the wiring task. The LayerZero toolchain will automatically detect that no private key is present to sign, perform checks on-chain, and generate/propose the raw transaction payloads (calldata).
+3. Copy the proposed calldata, target addresses, and value fields from the terminal.
+4. Open the Gnosis Safe dashboard on the respective chain.
+5. Launch the **Transaction Builder** app.
+6. Input the target contract address, paste the generated calldata, and enqueue the transaction.
+7. Repeat for all enqueued pathways, and sign/execute the transactions with the Safe owners.
+
+### 11.4 Post-Wiring Verification & Diagnostics
+Before authorizing a bridge to mint/burn tokens, you **must** perform a configuration check:
+1. Run the wiring task on the selected network.
+2. Query the actual configured peers using:
+   ```bash
+   npm run lz:peers:testnet
+   ```
+3. Query and export the pathway configurations, verifying dvns and confirmations:
+   ```bash
+   npm run lz:config:testnet
+   ```
+4. Verify that the output lists the correct expected peers and connection statuses.
+
+### 11.5 Mainnet Security and DVN Policy
+* **Testnet Policy:** A single DVN configuration (using the default `LayerZero Labs` DVN) is acceptable for initial integration testing.
+* **Mainnet Policy:** A single-DVN configuration poses a central point of compromise. For mainnet production deployments:
+  - Configure **multiple required DVNs** (e.g., Google Cloud DVN, Nethermind DVN, LayerZero Labs DVN) via `lzRequiredDVNs` in the network configuration block of the active manifest (e.g. [deploy_manifest.mainnet.json](deploy_manifest.mainnet.json)).
+  - Alternatively, configure a required/optional threshold setup.
+  - Do not enable production bridge use (e.g., granting `MINTER_ROLE` to the bridge adapter on the token contract) until the multi-DVN config is successfully wired and read back matching the approved security policy.
+

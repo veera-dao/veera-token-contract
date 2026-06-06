@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import {Script, console} from "forge-std/Script.sol";
 import {Veera} from "../src/Veera.sol";
@@ -27,8 +27,9 @@ contract DeployVeera is Script {
             require(deployerAddress == manifest.bootstrapAdmin, "Wrong deployer address in environment");
         }
 
-        // Validate manifest integrity (skip check on local anvil if bootstrapping mode is active)
-        if (block.chainid != 31337 || manifest.expectedTokenAddress != address(0)) {
+        // Validate manifest integrity (only if deploy_manifest.mainnet.json is in use)
+        string memory manifestPath = vm.envOr("DEPLOY_MANIFEST_PATH", string(""));
+        if (keccak256(bytes(manifestPath)) == keccak256(bytes("deploy_manifest.mainnet.json"))) {
             bytes32 calculatedHash = keccak256(
                 abi.encode(
                     manifest.salt,
@@ -59,8 +60,10 @@ contract DeployVeera is Script {
         require(codeSize > 0, "CREATE2 factory not deployed on target chain");
         require(codeHash == manifest.factoryCodeHash, "Unexpected CREATE2 factory bytecode");
 
-        // Validate targetAdmin contract (Gnosis Safe) exists on live networks
-        if (block.chainid != 31337) {
+        // Validate targetAdmin contract (Gnosis Safe) exists on live networks (only if deploy_manifest.mainnet.json is in use)
+        if (
+            block.chainid != 31337 && keccak256(bytes(manifestPath)) == keccak256(bytes("deploy_manifest.mainnet.json"))
+        ) {
             uint256 adminCodeSize;
             address targetAdminAddress = manifest.targetAdmin;
             assembly {
@@ -71,7 +74,7 @@ contract DeployVeera is Script {
 
         // 3. Compute and validate predicted CREATE2 address
         bytes memory bytecode;
-        string memory artifactPath = vm.envOr("ARTIFACT_PATH", string(""));
+        string memory artifactPath = vm.envOr("TOKEN_ARTIFACT_PATH", string(""));
 
         if (bytes(artifactPath).length > 0) {
             bytecode = vm.getCode(artifactPath);

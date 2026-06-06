@@ -1,6 +1,8 @@
 # Compiler files
 cache/
 out/
+artifacts/
+cache_hardhat/
 
 # Ignores development broadcast logs
 !/broadcast
@@ -18,3 +20,4 @@ node_modules/
 keystores/
 broadcast/
 scratch/
+deploy_manifest.local.json

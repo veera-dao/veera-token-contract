@@ -16,11 +16,9 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-MANIFEST_FILE="${SCRIPT_PATH}/../deploy_manifest.json"
-
+MANIFEST_FILE="${SCRIPT_PATH}/../deploy_manifest.mainnet.json"
 # The approved production checksum representing the audited configuration
-APPROVED_CHECKSUM="5b134cc4bf299289e9ab9bc6ae7c356faa1e3e29807f00d54811343e5b3c2435"
-
+APPROVED_CHECKSUM="ab5afe5ba3e6c4a8c57b91a5b69ac28d1d47d5cd104ffb68583e8b741bec66f0"
 echo -e "${BLUE}${BOLD}================================================================${NC}"
 echo -e "${CYAN}${BOLD}🔒 MANIFEST INTEGRITY VERIFICATION PROTOCOL${NC}"
 echo -e "${BLUE}${BOLD}================================================================${NC}"
@@ -41,7 +39,7 @@ else
     exit 1
 fi
 
-echo -e "${CYAN}File:             ${NC}deploy_manifest.json"
+echo -e "${CYAN}File:             ${NC}deploy_manifest.mainnet.json"
 echo -e "${CYAN}Computed Checksum:${NC} ${COMPUTED_CHECKSUM}"
 echo -e "${CYAN}Expected Checksum:${NC} ${APPROVED_CHECKSUM}"
 
@@ -54,7 +52,7 @@ if [ "$COMPUTED_CHECKSUM" = "$APPROVED_CHECKSUM" ]; then
 else
     echo -e "${BLUE}----------------------------------------------------------------${NC}"
     echo -e "${RED}${BOLD}🚨 WARNING: Manifest integrity checksum mismatch!${NC}"
-    echo -e "${YELLOW}Proposing changes to deploy_manifest.json requires updating${NC}"
+    echo -e "${YELLOW}Proposing changes to deploy_manifest.mainnet.json requires updating${NC}"
     echo -e "${YELLOW}both the code-level integrity hash in DeployVeera.s.sol and${NC}"
     echo -e "${YELLOW}the script APPROVED_CHECKSUM in scripts/verify-manifest-checksum.sh.${NC}"
     echo -e "${YELLOW}Please review the changes manually before deploying to production.${NC}"

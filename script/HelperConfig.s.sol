@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import {Script, stdJson} from "forge-std/Script.sol";
 
@@ -23,15 +23,21 @@ contract HelperConfig is Script {
         address targetAdmin;
         address initialMintRecipient;
         uint256 expectedPostDeploymentSupply;
+
+        // LayerZero configuration
+        address lzEndpoint;
+        uint32 eid;
+        address expectedBridgeAddress;
     }
 
     ManifestConfig public manifestConfig;
 
     constructor() {
-        string memory path = string.concat(vm.projectRoot(), "/deploy_manifest.json");
+        string memory manifestPath = vm.envString("DEPLOY_MANIFEST_PATH");
+        string memory path = string.concat(vm.projectRoot(), "/", manifestPath);
 
         // Validate file existence
-        require(vm.exists(path), "HelperConfig: deploy_manifest.json file does not exist at project root");
+        require(vm.exists(path), string.concat("HelperConfig: deploy manifest file does not exist at ", path));
 
         // forge-lint: disable-next-line(unsafe-cheatcode)
         string memory json = vm.readFile(path);
@@ -94,6 +100,28 @@ contract HelperConfig is Script {
                 manifestConfig.initialMintRecipient != address(0),
                 "HelperConfig: initialMintRecipient cannot be zero when expectedPostDeploymentSupply > 0"
             );
+        }
+
+        // Load LayerZero config if present in the manifest (otherwise fallback to default values)
+        string memory lzEndpointKey = string.concat(networkKey, ".lzEndpoint");
+        if (vm.keyExistsJson(json, lzEndpointKey)) {
+            manifestConfig.lzEndpoint = json.readAddress(lzEndpointKey);
+        } else {
+            manifestConfig.lzEndpoint = address(0);
+        }
+
+        string memory eidKey = string.concat(networkKey, ".lzEid");
+        if (vm.keyExistsJson(json, eidKey)) {
+            manifestConfig.eid = uint32(vm.parseUint(json.readString(eidKey)));
+        } else {
+            manifestConfig.eid = 0;
+        }
+
+        string memory expectedBridgeKey = string.concat(networkKey, ".expectedBridgeAddress");
+        if (vm.keyExistsJson(json, expectedBridgeKey)) {
+            manifestConfig.expectedBridgeAddress = json.readAddress(expectedBridgeKey);
+        } else {
+            manifestConfig.expectedBridgeAddress = address(0);
         }
     }
 

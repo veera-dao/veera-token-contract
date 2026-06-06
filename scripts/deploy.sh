@@ -10,7 +10,7 @@
 #   ./scripts/deploy.sh                        # Uses defaults from .env
 #   RPC_URL=<url> ./scripts/deploy.sh          # Override RPC
 #   DRY_RUN=true ./scripts/deploy.sh           # Simulate without broadcasting
-#   ARTIFACT_PATH=<path> ./scripts/deploy.sh   # Use pre-compiled bytecode (e.g. out/Veera.sol/Veera.json)
+#   TOKEN_ARTIFACT_PATH=<path> ./scripts/deploy.sh   # Use pre-compiled bytecode (e.g. out/Veera.sol/Veera.json)
 
 set -euo pipefail
 
@@ -23,11 +23,11 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-# Support both RPC_URL (generic) and BASE_RPC_URL (legacy) env vars
-RPC_URL="${RPC_URL:-${BASE_RPC_URL:-}}"
+
+RPC_URL="${1}"
 
 if [ -z "$RPC_URL" ]; then
-    echo "❌ Error: RPC_URL (or BASE_RPC_URL) is not set in .env"
+    echo "❌ Error: RPC_URL is required"
     exit 1
 fi
 

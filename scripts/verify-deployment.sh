@@ -34,12 +34,13 @@ if [ -z "$1" ]; then
 fi
 
 CONTRACT_ADDRESS="$1"
-EXPECTED_ADMIN="${2:-}"
+EXPECTED_ADMIN="$2"
+RPC_URL="$3"
 
 ALL_VALIDATIONS_PASSED=true
 
-if [ -z "$BASE_RPC_URL" ]; then
-    echo -e "${RED}${BOLD}❌ Error: No RPC URL set. Check your .env file BASE_RPC_URL value.${NC}"
+if [ -z "$RPC_URL" ]; then
+    echo -e "${RED}${BOLD}❌ Error: No RPC URL set. Check your .env file RPC_URL value.${NC}"
     exit 1
 fi
 
@@ -67,7 +68,7 @@ echo -e "${NC}"
 echo ""
 echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${CYAN}${BOLD}📡 Contract:${NC} ${MAGENTA}$CONTRACT_ADDRESS${NC}"
-echo -e "${CYAN}${BOLD}🌐 RPC:${NC} ${MAGENTA}$BASE_RPC_URL${NC}"
+echo -e "${CYAN}${BOLD}🌐 RPC:${NC} ${MAGENTA}$RPC_URL${NC}"
 echo ""
 
 # Get DEFAULT_ADMIN_ROLE hash (should be 0x00)
@@ -76,8 +77,8 @@ DEFAULT_ADMIN_ROLE="0x0000000000000000000000000000000000000000000000000000000000
 # Get role hashes from the contract's public constants (most reliable method)
 echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${CYAN}${BOLD}🔐 Role Hashes${NC} ${YELLOW}⏳ Querying...${NC}"
-MINTER_ROLE=$(cast call "$CONTRACT_ADDRESS" "MINTER_ROLE()(bytes32)" --rpc-url "$BASE_RPC_URL")
-PAUSER_ROLE=$(cast call "$CONTRACT_ADDRESS" "PAUSER_ROLE()(bytes32)" --rpc-url "$BASE_RPC_URL")
+MINTER_ROLE=$(cast call "$CONTRACT_ADDRESS" "MINTER_ROLE()(bytes32)" --rpc-url "$RPC_URL")
+PAUSER_ROLE=$(cast call "$CONTRACT_ADDRESS" "PAUSER_ROLE()(bytes32)" --rpc-url "$RPC_URL")
 
 if [ -z "$MINTER_ROLE" ] || [ -z "$PAUSER_ROLE" ]; then
     echo -e "${RED}${BOLD}${BG_RED}❌ CRITICAL: Failed to retrieve role hashes${NC}"
@@ -94,7 +95,7 @@ if [ -n "$EXPECTED_ADMIN" ]; then
     echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${CYAN}${BOLD}👑 Admin Roles${NC} ${YELLOW}🎯 $EXPECTED_ADMIN${NC}"
     
-    HAS_ROLE=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$DEFAULT_ADMIN_ROLE" "$EXPECTED_ADMIN" --rpc-url "$BASE_RPC_URL")
+    HAS_ROLE=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$DEFAULT_ADMIN_ROLE" "$EXPECTED_ADMIN" --rpc-url "$RPC_URL")
     if [ "$HAS_ROLE" == "true" ]; then
         echo -e "   ${GREEN}${BOLD}✓${NC} ${CYAN}ADMIN${NC} ${GREEN}assigned${NC}"
     else
@@ -102,7 +103,7 @@ if [ -n "$EXPECTED_ADMIN" ]; then
         ALL_VALIDATIONS_PASSED=false
     fi
 
-    HAS_ROLE=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$MINTER_ROLE" "$EXPECTED_ADMIN" --rpc-url "$BASE_RPC_URL")
+    HAS_ROLE=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$MINTER_ROLE" "$EXPECTED_ADMIN" --rpc-url "$RPC_URL")
     if [ "$HAS_ROLE" == "true" ]; then
         echo -e "   ${GREEN}${BOLD}✓${NC} ${CYAN}MINTER${NC} ${GREEN}assigned${NC}"
     else
@@ -110,7 +111,7 @@ if [ -n "$EXPECTED_ADMIN" ]; then
         ALL_VALIDATIONS_PASSED=false
     fi
 
-    HAS_ROLE=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$PAUSER_ROLE" "$EXPECTED_ADMIN" --rpc-url "$BASE_RPC_URL")
+    HAS_ROLE=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$PAUSER_ROLE" "$EXPECTED_ADMIN" --rpc-url "$RPC_URL")
     if [ "$HAS_ROLE" == "true" ]; then
         echo -e "   ${GREEN}${BOLD}✓${NC} ${CYAN}PAUSER${NC} ${GREEN}assigned${NC}"
     else
@@ -123,10 +124,10 @@ fi
 # Check token metadata
 echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${CYAN}${BOLD}📊 Token Metadata${NC} ${YELLOW}⏳ Querying...${NC}"
-TOKEN_NAME=$(cast call "$CONTRACT_ADDRESS" "name()(string)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
-TOKEN_SYMBOL=$(cast call "$CONTRACT_ADDRESS" "symbol()(string)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
-TOTAL_SUPPLY=$(cast call "$CONTRACT_ADDRESS" "totalSupply()(uint256)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
-CAP=$(cast call "$CONTRACT_ADDRESS" "cap()(uint256)" --rpc-url "$BASE_RPC_URL" | tr -d '\n\r' | xargs)
+TOKEN_NAME=$(cast call "$CONTRACT_ADDRESS" "name()(string)" --rpc-url "$RPC_URL" | tr -d '\n\r' | xargs)
+TOKEN_SYMBOL=$(cast call "$CONTRACT_ADDRESS" "symbol()(string)" --rpc-url "$RPC_URL" | tr -d '\n\r' | xargs)
+TOTAL_SUPPLY=$(cast call "$CONTRACT_ADDRESS" "totalSupply()(uint256)" --rpc-url "$RPC_URL" | tr -d '\n\r' | xargs)
+CAP=$(cast call "$CONTRACT_ADDRESS" "cap()(uint256)" --rpc-url "$RPC_URL" | tr -d '\n\r' | xargs)
 
 if [ "$TOKEN_NAME" == "Veera Token" ]; then
     TOKEN_NAME_STATUS="${GREEN}${BOLD}✓ VERIFIED${NC}"
@@ -172,7 +173,7 @@ echo -e "   ${CAP_STATUS} ${CYAN}Cap:${NC} ${MAGENTA}$CAP${NC} ${CAP_EXPECTED}"
 # Check if contract is paused (should be false initially)
 echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${CYAN}${BOLD}⏸️  Pause State${NC} ${YELLOW}⏳ Checking...${NC}"
-IS_PAUSED=$(cast call "$CONTRACT_ADDRESS" "paused()(bool)" --rpc-url "$BASE_RPC_URL")
+IS_PAUSED=$(cast call "$CONTRACT_ADDRESS" "paused()(bool)" --rpc-url "$RPC_URL")
 if [ "$IS_PAUSED" == "true" ]; then
     echo -e "   ${RED}${BOLD}${BG_RED}⚠️  PAUSED${NC} ${YELLOW}Emergency state detected${NC}"
     ALL_VALIDATIONS_PASSED=false
@@ -185,7 +186,7 @@ if [ -n "$DEPLOYER_ADDRESS" ]; then
     echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${CYAN}${BOLD}🔒 Security Check${NC} ${YELLOW}🎯 $DEPLOYER_ADDRESS${NC}"
     
-    DEPLOYER_HAS_ADMIN=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$DEFAULT_ADMIN_ROLE" "$DEPLOYER_ADDRESS" --rpc-url "$BASE_RPC_URL")
+    DEPLOYER_HAS_ADMIN=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$DEFAULT_ADMIN_ROLE" "$DEPLOYER_ADDRESS" --rpc-url "$RPC_URL")
     if [ "$DEPLOYER_HAS_ADMIN" == "false" ]; then
         echo -e "   ${GREEN}${BOLD}✓${NC} ${CYAN}ADMIN${NC} ${GREEN}secure${NC}"
     else
@@ -193,7 +194,7 @@ if [ -n "$DEPLOYER_ADDRESS" ]; then
         ALL_VALIDATIONS_PASSED=false
     fi
 
-    DEPLOYER_HAS_MINTER=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$MINTER_ROLE" "$DEPLOYER_ADDRESS" --rpc-url "$BASE_RPC_URL")
+    DEPLOYER_HAS_MINTER=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$MINTER_ROLE" "$DEPLOYER_ADDRESS" --rpc-url "$RPC_URL")
     if [ "$DEPLOYER_HAS_MINTER" == "false" ]; then
         echo -e "   ${GREEN}${BOLD}✓${NC} ${CYAN}MINTER${NC} ${GREEN}secure${NC}"
     else
@@ -201,7 +202,7 @@ if [ -n "$DEPLOYER_ADDRESS" ]; then
         ALL_VALIDATIONS_PASSED=false
     fi
 
-    DEPLOYER_HAS_PAUSER=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$PAUSER_ROLE" "$DEPLOYER_ADDRESS" --rpc-url "$BASE_RPC_URL")
+    DEPLOYER_HAS_PAUSER=$(cast call "$CONTRACT_ADDRESS" "hasRole(bytes32,address)(bool)" "$PAUSER_ROLE" "$DEPLOYER_ADDRESS" --rpc-url "$RPC_URL")
     if [ "$DEPLOYER_HAS_PAUSER" == "false" ]; then
         echo -e "   ${GREEN}${BOLD}✓${NC} ${CYAN}PAUSER${NC} ${GREEN}secure${NC}"
     else
