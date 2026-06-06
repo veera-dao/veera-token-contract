@@ -25,6 +25,24 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
+if [ -z "${DEPLOYER_ADDRESS:-}" ]; then
+  MANIFEST_PATH="${REPO_ROOT}/${DEPLOY_MANIFEST_PATH}"
+  if [[ -f "$MANIFEST_PATH" ]]; then
+    if command -v jq >/dev/null 2>&1; then
+      DEPLOYER_ADDRESS=$(jq -r '.bootstrapAdmin' "$MANIFEST_PATH")
+    elif command -v node >/dev/null 2>&1; then
+      DEPLOYER_ADDRESS=$(node -e "console.log(require('$MANIFEST_PATH').bootstrapAdmin)")
+    else
+      DEPLOYER_ADDRESS=$(grep -m 1 '"bootstrapAdmin"' "$MANIFEST_PATH" | sed -E 's/.*"bootstrapAdmin"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    fi
+    export DEPLOYER_ADDRESS
+    echo "ℹ️  Loaded DEPLOYER_ADDRESS from manifest bootstrapAdmin: $DEPLOYER_ADDRESS"
+  else
+    echo "⚠️  Warning: Manifest file not found at $MANIFEST_PATH"
+  fi
+fi
+
+
 RPC_URL="$1"
 if [ -z "$RPC_URL" ]; then
     echo "❌ Error: RPC_URL is required"
