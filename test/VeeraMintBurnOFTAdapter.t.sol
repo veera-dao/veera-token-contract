@@ -925,6 +925,41 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
         vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidReceiverAddress.selector));
         verifyPackets(A_EID, address(adapterA));
     }
+
+    function test_Send_Outward_RevertsIf_ZeroReceiver() public {
+        uint256 amountToSend = 10e18;
+        tokenA.mint(userA, amountToSend);
+
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(200000, 0);
+        SendParam memory sendParam = SendParam({
+            dstEid: B_EID,
+            to: bytes32(0),
+            amountLD: amountToSend,
+            minAmountLD: amountToSend,
+            extraOptions: options,
+            composeMsg: "",
+            oftCmd: ""
+        });
+
+        // 1. quoteSend should revert with InvalidReceiverAddress
+        vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidReceiverAddress.selector));
+        adapterA.quoteSend(sendParam, false);
+
+        // Approve and attempt to send
+        vm.prank(userA);
+        tokenA.approve(address(adapterA), amountToSend);
+
+        uint256 balanceBefore = tokenA.balanceOf(userA);
+        uint256 supplyBefore = tokenA.totalSupply();
+
+        // 2. send should revert with InvalidReceiverAddress
+        vm.prank(userA);
+        vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidReceiverAddress.selector));
+        adapterA.send(sendParam, MessagingFee(0, 0), payable(userA));
+
+        assertEq(tokenA.balanceOf(userA), balanceBefore);
+        assertEq(tokenA.totalSupply(), supplyBefore);
+    }
 }
 
 // Reentrancy tester contract
