@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {OFTAdapter} from "@layerzerolabs/oapp-evm/contracts/oft/OFTAdapter.sol";
-import {SendParam, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oft/interfaces/IOFT.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {RateLimiter} from "@layerzerolabs/oapp-evm/contracts/oapp/utils/RateLimiter.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {RateLimiter} from "@layerzerolabs/oapp-evm/contracts/oapp/utils/RateLimiter.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SendParam} from "@layerzerolabs/oapp-evm/contracts/oft/interfaces/IOFT.sol";
 import {Veera} from "../Veera.sol";
 
 /**
@@ -29,10 +29,18 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter, RateLimiter, Pausable {
 
     event ERC20Rescued(address indexed token, address indexed to, uint256 amount);
 
+    /**
+     * @notice Pauses the OFT Adapter contract.
+     * @dev Only callable by the owner. While paused, outgoing sends, incoming receives, and quotes are disabled.
+     */
     function pause() external onlyOwner {
         Pausable._pause();
     }
 
+    /**
+     * @notice Unpauses the OFT Adapter contract.
+     * @dev Only callable by the owner. Restores bridging functionality.
+     */
     function unpause() external onlyOwner {
         Pausable._unpause();
     }
@@ -56,6 +64,23 @@ contract VeeraMintBurnOFTAdapter is OFTAdapter, RateLimiter, Pausable {
      */
     function setRateLimits(RateLimiter.RateLimitConfig[] calldata _rateLimitConfigs) external onlyOwner {
         RateLimiter._setRateLimits(_rateLimitConfigs);
+    }
+
+    /**
+     * @dev Internal function to build the message and options.
+     * @param _sendParam The parameters for the send() operation.
+     * @param _amountLD The amount in local decimals.
+     * @return message The encoded message.
+     * @return options The encoded options.
+     */
+    function _buildMsgAndOptions(SendParam calldata _sendParam, uint256 _amountLD)
+        internal
+        view
+        override
+        returns (bytes memory message, bytes memory options)
+    {
+        if (_sendParam.to == bytes32(0)) revert InvalidReceiverAddress();
+        return super._buildMsgAndOptions(_sendParam, _amountLD);
     }
 
     /**
