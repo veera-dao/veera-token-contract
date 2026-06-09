@@ -949,10 +949,16 @@ contract VeeraMintBurnOFTAdapterTest is LayerZeroTestHelper {
         vm.prank(userA);
         tokenA.approve(address(adapterA), amountToSend);
 
+        uint256 balanceBefore = tokenA.balanceOf(userA);
+        uint256 supplyBefore = tokenA.totalSupply();
+
         // 2. send should revert with InvalidReceiverAddress
         vm.prank(userA);
         vm.expectRevert(abi.encodeWithSelector(VeeraMintBurnOFTAdapter.InvalidReceiverAddress.selector));
         adapterA.send(sendParam, MessagingFee(0, 0), payable(userA));
+
+        assertEq(tokenA.balanceOf(userA), balanceBefore);
+        assertEq(tokenA.totalSupply(), supplyBefore);
     }
 }
 
