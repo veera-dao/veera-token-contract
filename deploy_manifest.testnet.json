@@ -21,7 +21,7 @@
       "expectedPostDeploymentSupply": "1000000000000000000000000000",
       "lzEndpoint": "0x6EDCE65403992e310A62460808c4b910D972f10f",
       "lzEid": "40245",
-      "expectedBridgeAddress": "0x1873A6e7534999d6C6bB1372D582Fc7b3384bAbE",
+      "expectedBridgeAddress": "0x812bbd935209dC60cb4B249fc24cF7FD31AeC102",
       "lzConfirmations": 1,
       "lzReceiveGas": 200000,
       "lzRequiredDVNs": [
@@ -35,7 +35,7 @@
       "expectedPostDeploymentSupply": "0",
       "lzEndpoint": "0x6EDCE65403992e310A62460808c4b910D972f10f",
       "lzEid": "40102",
-      "expectedBridgeAddress": "0xAed37766Ec8238587d4F2e3f2d993F85D1D1c0d1",
+      "expectedBridgeAddress": "0x51B58210055f72D9843bdeBC6Deb33b5E9B7F61E",
       "lzConfirmations": 1,
       "lzReceiveGas": 200000,
       "lzRequiredDVNs": [
