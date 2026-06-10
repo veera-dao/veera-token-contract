@@ -25,7 +25,7 @@ The architecture is designed with **security** and **future interoperability** (
 ## Documentation
 
 * [Token](docs/token.md)
-* [OFT Bridge](docs/oft_bridge.md)
+* [Bridge](docs/bridge.md)
 
 ## Audits
 
