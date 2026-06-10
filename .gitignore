@@ -21,3 +21,4 @@ keystores/
 broadcast/
 scratch/
 deploy_manifest.local.json
+tx/

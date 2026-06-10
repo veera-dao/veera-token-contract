@@ -41,27 +41,43 @@ fi
 CONTRACT_ADDRESS="$1"
 MINTER_ADDRESS="$2"
 RPC_URL="${3:-${BASE_RPC_URL:-}}"
-# Keystore and password for current admin
-KEYSTORE_PATH="$4"
-PASSWORD_FILE="$5"
-
 if [ -z "$RPC_URL" ]; then
     echo -e "${RED}${BOLD}❌ Error: RPC URL required. Provide as 3rd argument or set BASE_RPC_URL in .env${NC}"
     exit 1
 fi
 
-# Keystore configuration
-# KEYSTORE_PATH="$REPO_ROOT/keystores/testnet-deployer-1"
-# PASSWORD_FILE="$REPO_ROOT/keystores/pass.pass"
+# Determine signing method
+SIGNER_FLAGS=""
+SIGNER_INFO=""
 
-if [[ ! -f "$KEYSTORE_PATH" ]]; then
-    echo -e "${RED}${BOLD}❌ Error: Keystore not found: $KEYSTORE_PATH${NC}"
-    exit 1
-fi
+if [ -n "${HARDWARE:-}" ]; then
+    SIGNER_INFO="Hardware ($HARDWARE)"
+    SIGNER_FLAGS="$HARDWARE"
+elif [ -n "${LZ_CONFIG_PRIVATE_KEY:-}" ]; then
+    SIGNER_INFO="Private Key (LZ_CONFIG_PRIVATE_KEY)"
+    SIGNER_FLAGS="--private-key $LZ_CONFIG_PRIVATE_KEY"
+else
+    KEYSTORE_PATH="${4:-${KEYSTORE_PATH:-}}"
+    PASSWORD_FILE="${5:-${PASSWORD_FILE:-}}"
 
-if [[ ! -f "$PASSWORD_FILE" ]]; then
-    echo -e "${RED}${BOLD}❌ Error: Password file not found: $PASSWORD_FILE${NC}"
-    exit 1
+    if [ -z "$KEYSTORE_PATH" ] || [ -z "$PASSWORD_FILE" ]; then
+        echo -e "${RED}${BOLD}❌ Error: No signing method found.${NC}"
+        echo -e "${RED}Please define HARDWARE, LZ_CONFIG_PRIVATE_KEY, or both KEYSTORE_PATH and PASSWORD_FILE.${NC}"
+        exit 1
+    fi
+
+    if [[ ! -f "$KEYSTORE_PATH" ]]; then
+        echo -e "${RED}${BOLD}❌ Error: Keystore not found: $KEYSTORE_PATH${NC}"
+        exit 1
+    fi
+
+    if [[ ! -f "$PASSWORD_FILE" ]]; then
+        echo -e "${RED}${BOLD}❌ Error: Password file not found: $PASSWORD_FILE${NC}"
+        exit 1
+    fi
+
+    SIGNER_INFO="Keystore ($(basename "$KEYSTORE_PATH"))"
+    SIGNER_FLAGS="--keystore $KEYSTORE_PATH --password-file $PASSWORD_FILE"
 fi
 
 # Get MINTER_ROLE hash from contract
@@ -87,7 +103,7 @@ echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━
 echo -e "${CYAN}${BOLD}📡 Contract:${NC} ${CONTRACT_ADDRESS}"
 echo -e "${CYAN}${BOLD}🪙 New Minter:${NC} ${MINTER_ADDRESS}"
 echo -e "${CYAN}${BOLD}🌐 RPC:${NC} ${RPC_URL}"
-echo -e "${CYAN}${BOLD}🔑 Keystore:${NC} $(basename "$KEYSTORE_PATH")"
+echo -e "${CYAN}${BOLD}🔑 Signer:${NC} ${SIGNER_INFO}"
 echo -e "${CYAN}${BOLD}🔐 Role Hash:${NC} ${MINTER_ROLE}"
 echo ""
 
@@ -144,13 +160,12 @@ TX_HASH=$(cast send "$CONTRACT_ADDRESS" \
     "$MINTER_ROLE" \
     "$MINTER_ADDRESS" \
     --rpc-url "$RPC_URL" \
-    --keystore "$KEYSTORE_PATH" \
-    --password-file "$PASSWORD_FILE" \
+    ${SIGNER_FLAGS} \
     --json 2>/dev/null | jq -r '.transactionHash' || echo "")
 
 if [ -z "$TX_HASH" ] || [ "$TX_HASH" == "null" ]; then
     echo -e "${RED}${BOLD}❌ Error: Transaction failed${NC}"
-    echo -e "${RED}   Please check your keystore password and that the signer has DEFAULT_ADMIN_ROLE.${NC}"
+    echo -e "${RED}   Please check your signer credentials/connection and that the signer has DEFAULT_ADMIN_ROLE.${NC}"
     exit 1
 fi
 

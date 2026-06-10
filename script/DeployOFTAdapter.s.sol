@@ -105,8 +105,7 @@ contract DeployOFTAdapter is Script {
         }
 
         bytes memory creationCode = abi.encodePacked(
-            bytecode,
-            abi.encode(manifest.expectedTokenAddress, manifest.lzEndpoint, manifest.targetAdmin)
+            bytecode, abi.encode(manifest.expectedTokenAddress, manifest.lzEndpoint, manifest.targetAdmin)
         );
         bytes32 initCodeHash = keccak256(creationCode);
         address predicted = vm.computeCreate2Address(manifest.salt, initCodeHash, manifest.factory);
